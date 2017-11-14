@@ -49,7 +49,7 @@ class BGAN(object):
         
         self.sghmc_noise = {}
         self.noise_std = np.sqrt(2 * self.alpha)
-        for name, dim in self.weight_dims.iteritems():
+        for name, dim in self.weight_dims.items():
             self.sghmc_noise[name] = tf.contrib.distributions.Normal(mu=0., sigma=self.noise_std*tf.ones(self.weight_dims[name]))
 
         self.K = num_classes # 1 means unsupervised, label == 0 always reserved for fake
@@ -111,10 +111,10 @@ class BGAN(object):
 
         self.gen_param_list = []
         with tf.variable_scope("generator") as scope:
-            for gi in xrange(self.num_gen):
-                for m in xrange(self.num_mcmc):
+            for gi in range(self.num_gen):
+                for m in range(self.num_mcmc):
                     gen_params = AttributeDict()
-                    for name, shape in self.weight_dims.iteritems():
+                    for name, shape in self.weight_dims.items():
                         gen_params[name] = tf.get_variable("%s_%04d_%04d" % (name, gi, m),
                                                            shape, initializer=tf.random_normal_initializer(stddev=0.02))
                     self.gen_param_list.append(gen_params)
@@ -169,8 +169,8 @@ class BGAN(object):
                 self.d_loss_semi += self.disc_prior() + self.disc_noise()
 
         self.g_vars = []
-        for gi in xrange(self.num_gen):
-            for m in xrange(self.num_mcmc):
+        for gi in range(self.num_gen):
+            for m in range(self.num_mcmc):
                 self.g_vars.append([var for var in t_vars if 'g_' in var.name and "_%04d_%04d" % (gi, m) in var.name])
 
         self.d_learning_rate = tf.placeholder(tf.float32, shape=[])
@@ -192,7 +192,7 @@ class BGAN(object):
         
         self.g_optims, self.g_optims_adam = [], []
         self.g_learning_rate = tf.placeholder(tf.float32, shape=[])
-        for gi in xrange(self.num_gen*self.num_mcmc):
+        for gi in range(self.num_gen*self.num_mcmc):
             if self.wasserstein:
                 g_loss = tf.reduce_mean(self.generation["d_logits"][gi])
             else:
@@ -234,7 +234,7 @@ class BGAN(object):
     def gen_prior(self, gen_params):
         with tf.variable_scope("generator") as scope:
             prior_loss = 0.0
-            for var in gen_params.values():
+            for var in list(gen_params.values()):
                 nn = tf.divide(var, self.prior_std)
                 prior_loss += tf.reduce_mean(tf.multiply(nn, nn))
                 
@@ -245,7 +245,7 @@ class BGAN(object):
     def gen_noise(self, gen_params): # for SGHMC
         with tf.variable_scope("generator") as scope:
             noise_loss = 0.0
-            for name, var in gen_params.iteritems():
+            for name, var in gen_params.items():
                 noise_loss += tf.reduce_sum(var * self.sghmc_noise[name].sample())
         noise_loss /= self.gen_observed
         return noise_loss
@@ -348,7 +348,7 @@ class BDCGAN(BGAN):
 
         self.sghmc_noise = {}
         self.noise_std = np.sqrt(2 * self.alpha * self.eta)
-        for name, dim in self.weight_dims.iteritems():
+        for name, dim in self.weight_dims.items():
             self.sghmc_noise[name] = tf.contrib.distributions.Normal(mu=0., sigma=self.noise_std*tf.ones(self.weight_dims[name]))
 
         self.K = num_classes # 1 means unsupervised, label == 0 always reserved for fake

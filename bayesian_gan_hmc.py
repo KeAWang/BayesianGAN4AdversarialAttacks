@@ -23,11 +23,11 @@ import time
 
 def get_session():
     if tf.get_default_session() is None:
-        print "Creating new session"
+        print("Creating new session")
         tf.reset_default_graph()
         _SESSION = tf.InteractiveSession()
     else:
-        print "Using old session"
+        print("Using old session")
         _SESSION = tf.get_default_session()
 
     return _SESSION
@@ -46,17 +46,17 @@ def get_gan_labels(lbls):
 def get_supervised_batches(dataset, size, batch_size, class_ids):
 
     def batchify_with_size(sampled_imgs, sampled_labels, size):
-        rand_idx = np.random.choice(range(sampled_imgs.shape[0]), size, replace=False)
+        rand_idx = np.random.choice(list(range(sampled_imgs.shape[0])), size, replace=False)
         imgs_ = sampled_imgs[rand_idx]
         lbls_ = sampled_labels[rand_idx]
-        rand_idx = np.random.choice(range(imgs_.shape[0]), batch_size, replace=True)
+        rand_idx = np.random.choice(list(range(imgs_.shape[0])), batch_size, replace=True)
         imgs_ = imgs_[rand_idx]
         lbls_ = lbls_[rand_idx] 
         return imgs_, lbls_
 
     labeled_image_batches, lblss = [], []
     num_passes = int(ceil(float(size) / batch_size))
-    for _ in xrange(num_passes):
+    for _ in range(num_passes):
         for class_id in class_ids:
             labeled_image_batch, lbls = dataset.next_batch(int(ceil(float(batch_size)/len(class_ids))),
                                                            class_id=class_id)
@@ -115,7 +115,7 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
 
     not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     if len(not_fake) < 10:
-        print "WARNING: not enough samples for SS results"
+        print("WARNING: not enough samples for SS results")
     semi_sup_acc = (100. * np.sum(np.argmax(test_d_logits[not_fake], 1) == np.argmax(test_lbls[not_fake], 1) + 1))\
                    / len(not_fake)
     sup_acc = (100. * np.sum(np.argmax(test_s_logits, 1) == np.argmax(test_lbls, 1)))\
@@ -140,10 +140,10 @@ def b_dcgan(dataset, args):
                    lr=args.lr, optimizer=args.optimizer, gen_observed=args.gen_observed,
                    num_classes=dataset.num_classes if args.semi_supervised else 1)
     
-    print "Starting session"
+    print("Starting session")
     session.run(tf.global_variables_initializer())
 
-    print "Starting training loop"
+    print("Starting training loop")
         
     num_train_iter = args.train_iter
 
@@ -151,7 +151,7 @@ def b_dcgan(dataset, args):
         # implement own data feeder if data doesnt fit in memory
         supervised_batches = dataset.supervised_batches(args.N, batch_size)
     else:
-        supervised_batches = get_supervised_batches(dataset, args.N, batch_size, range(dataset.num_classes))
+        supervised_batches = get_supervised_batches(dataset, args.N, batch_size, list(range(dataset.num_classes)))
 
     if args.semi_supervised:
         test_image_batches, test_label_batches = get_test_batches(dataset, batch_size)
@@ -170,7 +170,7 @@ def b_dcgan(dataset, args):
     for train_iter in range(num_train_iter):
 
         if train_iter == 5000:
-            print "Switching to user-specified optimizer"
+            print("Switching to user-specified optimizer")
             if args.semi_supervised:
                 optimizer_dict = {"semi_d": dcgan.d_optim_semi,
                                   "sup_d": dcgan.s_optim,
@@ -188,7 +188,7 @@ def b_dcgan(dataset, args):
         
         if args.semi_supervised:
 
-            labeled_image_batch, labels = supervised_batches.next()
+            labeled_image_batch, labels = next(supervised_batches)
            
             _, d_loss = session.run([optimizer_dict["semi_d"], dcgan.d_loss_semi], feed_dict={dcgan.labeled_inputs: labeled_image_batch,
                                                                                               dcgan.labels: get_gan_labels(labels),
@@ -210,7 +210,7 @@ def b_dcgan(dataset, args):
             session.run(dcgan.clip_d, feed_dict={})
 
         g_losses = []
-        for gi in xrange(dcgan.num_gen):
+        for gi in range(dcgan.num_gen):
 
             # compute g_sample loss
             batch_z = np.random.uniform(-1, 1, [batch_size, z_dim])
@@ -221,11 +221,11 @@ def b_dcgan(dataset, args):
 
         if train_iter > 0 and train_iter % args.n_save == 0:
 
-            print "Iter %i" % train_iter
+            print("Iter %i" % train_iter)
             # collect samples
             if args.save_samples: # saving samples
                 all_sampled_imgs = []
-                for gi in xrange(dcgan.num_gen):
+                for gi in range(dcgan.num_gen):
                     _imgs, _ps = [], []
                     for _ in range(10):
                         sample_z = np.random.uniform(-1, 1, size=(batch_size, z_dim))
@@ -238,18 +238,18 @@ def b_dcgan(dataset, args):
                     sampled_imgs = np.concatenate(_imgs); sampled_probs = np.concatenate(_ps)
                     all_sampled_imgs.append([sampled_imgs, sampled_probs[:, 1:].sum(1)])
 
-            print "Disc loss = %.2f, Gen loss = %s" % (d_loss, ", ".join(["%.2f" % gl for gl in g_losses]))
+            print("Disc loss = %.2f, Gen loss = %s" % (d_loss, ", ".join(["%.2f" % gl for gl in g_losses])))
             if args.semi_supervised:
                 # get test set performance on real labels only for both GAN-based classifier and standard one
                 s_acc, ss_acc = get_test_accuracy(session, dcgan, test_image_batches, test_label_batches)
 
-                print "Sup classification acc: %.2f" % (s_acc)
-                print "Semi-sup classification acc: %.2f" % (ss_acc)
+                print("Sup classification acc: %.2f" % (s_acc))
+                print("Semi-sup classification acc: %.2f" % (ss_acc))
 
-            print "saving results and samples"
+            print("saving results and samples")
 
             results = {"disc_loss": float(d_loss),
-                       "gen_losses": map(float, g_losses)}
+                       "gen_losses": list(map(float, g_losses))}
             if args.semi_supervised:
                 results["supervised_acc"] = float(s_acc)
                 results["semi_supervised_acc"] = float(ss_acc)
@@ -259,7 +259,7 @@ def b_dcgan(dataset, args):
                 json.dump(results, fp)
             
             if args.save_samples:
-                for gi in xrange(dcgan.num_gen):
+                for gi in range(dcgan.num_gen):
                     print_images(all_sampled_imgs[gi], "B_DCGAN_%i_%.2f" % (gi, g_losses[gi*dcgan.num_mcmc]),
                                  train_iter, directory=args.out_dir)
 
@@ -275,7 +275,7 @@ def b_dcgan(dataset, args):
                                     **var_dict)
             
 
-            print "done"
+            print("done")
         
 
 
@@ -395,7 +395,7 @@ if __name__ == "__main__":
         tf.set_random_seed(args.random_seed)
 
     if not os.path.exists(args.out_dir):
-        print "Creating %s" % args.out_dir
+        print("Creating %s" % args.out_dir)
         os.makedirs(args.out_dir)
     args.out_dir = os.path.join(args.out_dir, "bgan_%s_%i" % (args.dataset, int(time.time())))
     os.makedirs(args.out_dir)
@@ -430,7 +430,7 @@ if __name__ == "__main__":
     if args.ml_ensemble:
         from ml_dcgan import ml_dcgan
         root = args.out_dir
-        for ens in xrange(args.ml_ensemble):
+        for ens in range(args.ml_ensemble):
             dataset = SVHN(svhn_path, subsample=0.8)
             args.out_dir = os.path.join(root, "%i" % ens)
             os.makedirs(args.out_dir)

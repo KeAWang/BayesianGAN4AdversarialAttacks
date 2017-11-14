@@ -50,6 +50,6 @@ if __name__ == "__main__":
             X_face = X[y:y+h, x:x+h, :]
             X_face = imresize(X_face, size=(50,50), interp="bicubic")
             imsave(os.path.join(celeb_path, ("%06d_cropped.jpg" % img_idx)), X_face)
-            print "Wrote %s" % os.path.join(celeb_path, "%06d_cropped.jpg" % img_idx)
+            print("Wrote %s" % os.path.join(celeb_path, "%06d_cropped.jpg" % img_idx))
             
             

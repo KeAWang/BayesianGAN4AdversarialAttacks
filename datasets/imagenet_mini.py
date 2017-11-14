@@ -18,6 +18,6 @@ if __name__ == "__main__":
         for train_or_val in ["train", "val"]:
             source_dir = os.path.join(data_path, "imagenet/%s_256/%s" % (train_or_val, rdir))
             dest_dir = os.path.join(dest_data_path, "imagenet_mini/%s_256/%s" % (train_or_val, rdir))
-            print "Copying %s to %s" % (source_dir, dest_dir)
+            print("Copying %s to %s" % (source_dir, dest_dir))
             shutil.copytree(source_dir, dest_dir)
 

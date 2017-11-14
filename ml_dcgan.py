@@ -39,7 +39,7 @@ def ml_dcgan(dataset, args):
     x_dim = dataset.x_dim
     batch_size = args.batch_size
 
-    print "Starting session"
+    print("Starting session")
     session = get_session()
 
     dcgan = BDCGAN(x_dim, z_dim,
@@ -49,9 +49,9 @@ def ml_dcgan(dataset, args):
 
     tf.global_variables_initializer().run()
 
-    print "Starting training loop"
+    print("Starting training loop")
         
-    labeled_image_batches, label_batches = get_supervised_batches(dataset, args.N, batch_size, range(dataset.num_classes))
+    labeled_image_batches, label_batches = get_supervised_batches(dataset, args.N, batch_size, list(range(dataset.num_classes)))
     test_image_batches, test_label_batches = get_test_batches(dataset, batch_size)
 
     for train_iter in range(args.train_iter):
@@ -74,7 +74,7 @@ def ml_dcgan(dataset, args):
         if train_iter % args.n_save == 0:
             # get test set performance on real labels only for both GAN-based classifier and standard one
             d_logits, s_logits, lbls = get_test_stats(session, dcgan, test_image_batches, test_label_batches)
-            print "saving results"
+            print("saving results")
             np.savez_compressed(os.path.join(args.out_dir, 'results_%i.npz' % train_iter),
                                 d_logits=d_logits, s_logits=s_logits, lbls=lbls)
 
@@ -87,8 +87,8 @@ def ml_dcgan(dataset, args):
                                 **var_dict)
             
 
-            print "done"
+            print("done")
 
-    print "closing session"
+    print("closing session")
     session.close()
     tf.reset_default_graph()

@@ -34,14 +34,19 @@ class batch_norm(object):
             self.epsilon = epsilon
             self.momentum = momentum
             self.name = name
+            self.called = False
 
     def __call__(self, x, train=True):
+        called = self.called
+        if not self.called:
+            self.called = True
         return tf.contrib.layers.batch_norm(x,
                                             decay=self.momentum,
                                             updates_collections=None,
                                             epsilon=self.epsilon,
                                             scale=False,
                                             center=False,
+                                            reuse=called,
                                             is_training=train,
                                             scope=self.name)
 
