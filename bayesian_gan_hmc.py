@@ -17,6 +17,11 @@ from tensorflow.contrib import slim
 from bgan_util import AttributeDict
 from bgan_util import print_images, MnistDataset, CelebDataset, Cifar10, SVHN, ImageNet
 from bgan_models import BDCGAN
+import sys
+sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
+from cleverhans.attacks import FastGradientMethod
+from cleverhans.utils_tf import model_train, model_eval
+from cleverhans.model import Model
 
 import time
 
@@ -133,13 +138,23 @@ def b_dcgan(dataset, args):
     dataset_size = dataset.dataset_size
 
     session = get_session()
+
+    x = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
+    y = tf.placeholder(tf.float32, shape=(batch_size, 10))
     if args.random_seed is not None:
 	    tf.set_random_seed(args.random_seed)
     # due to how much the TF code sucks all functions take fixed batch_size at all times
     dcgan = BDCGAN(x_dim, z_dim, dataset_size, batch_size=batch_size, J=args.J, M=args.M, 
                    lr=args.lr, optimizer=args.optimizer, gen_observed=args.gen_observed,
                    num_classes=dataset.num_classes if args.semi_supervised else 1)
-    
+    if args.adv_test:
+        fgsm = FastGradientMethod(dcgan, sess=session)
+        dcgan.adv_constructor = fgsm
+        eval_params = {'batch_size': batch_size}
+        fgsm_params = {'eps': 0.3,
+                   'clip_min': 0.,
+                   'clip_max': 1.}
+
     print("Starting session")
     session.run(tf.global_variables_initializer())
 
@@ -184,7 +199,7 @@ def b_dcgan(dataset, args):
                                                     min(1.0, (train_iter*batch_size)/float(dataset_size)))
 
         batch_z = np.random.uniform(-1, 1, [batch_size, z_dim])
-        image_batch, _ = dataset.next_batch(batch_size, class_id=None)
+        image_batch, batch_label = dataset.next_batch(batch_size, class_id=None)
         
         if args.semi_supervised:
 
@@ -219,6 +234,7 @@ def b_dcgan(dataset, args):
                                         feed_dict={dcgan.z: batch_z, dcgan.g_learning_rate: learning_rate})
                 g_losses.append(g_loss)
 
+
         if train_iter > 0 and train_iter % args.n_save == 0:
 
             print("Iter %i" % train_iter)
@@ -239,6 +255,14 @@ def b_dcgan(dataset, args):
                     all_sampled_imgs.append([sampled_imgs, sampled_probs[:, 1:].sum(1)])
 
             print("Disc loss = %.2f, Gen loss = %s" % (d_loss, ", ".join(["%.2f" % gl for gl in g_losses])))
+
+            if args.adv_test:
+                adv_x = fgsm.generate(x,**fgsm_params)
+                preds = dcgan.get_probs(adv_x)
+                acc = model_eval(
+                session, x, y, preds, image_batch, batch_label, args=eval_params)
+                
+            print("Adversarial loss = %2.f" % (1-acc))
             if args.semi_supervised:
                 # get test set performance on real labels only for both GAN-based classifier and standard one
                 s_acc, ss_acc = get_test_accuracy(session, dcgan, test_image_batches, test_label_batches)
@@ -348,6 +372,10 @@ if __name__ == "__main__":
                         type=int,
                         default=50000,
                         help="number of training iterations")
+
+    parser.add_argument('--adv_test',
+                        action="store_true",
+                        help="do adv testing")
 
     parser.add_argument('--wasserstein',
                         action="store_true",
