@@ -134,7 +134,7 @@ def b_dcgan(dataset, args):
 
     session = get_session()
     if args.random_seed is not None:
-	tf.set_random_seed(args.random_seed)
+	    tf.set_random_seed(args.random_seed)
     # due to how much the TF code sucks all functions take fixed batch_size at all times
     dcgan = BDCGAN(x_dim, z_dim, dataset_size, batch_size=batch_size, J=args.J, M=args.M, 
                    lr=args.lr, optimizer=args.optimizer, gen_observed=args.gen_observed,
