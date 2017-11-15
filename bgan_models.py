@@ -50,7 +50,7 @@ class BGAN(object):
         self.sghmc_noise = {}
         self.noise_std = np.sqrt(2 * self.alpha)
         for name, dim in self.weight_dims.items():
-            self.sghmc_noise[name] = tf.contrib.distributions.Normal(mu=0., sigma=self.noise_std*tf.ones(self.weight_dims[name]))
+            self.sghmc_noise[name] = tf.distributions.Normal(loc=0., scale=self.noise_std*tf.ones(self.weight_dims[name]))
 
         self.K = num_classes # 1 means unsupervised, label == 0 always reserved for fake
 
@@ -265,7 +265,7 @@ class BGAN(object):
         with tf.variable_scope("discriminator") as scope:
             noise_loss = 0.0
             for var in self.d_vars:
-                noise_ = tf.contrib.distributions.Normal(mu=0., sigma=self.noise_std*tf.ones(var.get_shape()))
+                noise_ = tf.distributions.Normal(loc=0., scale=self.noise_std*tf.ones(var.get_shape()))
                 noise_loss += tf.reduce_sum(var * noise_.sample())
         noise_loss /= self.dataset_size
         return noise_loss
@@ -349,7 +349,7 @@ class BDCGAN(BGAN):
         self.sghmc_noise = {}
         self.noise_std = np.sqrt(2 * self.alpha * self.eta)
         for name, dim in self.weight_dims.items():
-            self.sghmc_noise[name] = tf.contrib.distributions.Normal(mu=0., sigma=self.noise_std*tf.ones(self.weight_dims[name]))
+            self.sghmc_noise[name] = tf.distributions.Normal(loc=0., scale=self.noise_std*tf.ones(self.weight_dims[name]))
 
         self.K = num_classes # 1 means unsupervised, label == 0 always reserved for fake
 
