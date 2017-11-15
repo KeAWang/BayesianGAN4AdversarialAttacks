@@ -7,7 +7,11 @@ from bgan_util import AttributeDict
 
 
 #### Bayesian DCGAN
-
+import sys
+sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
+from cleverhans.attacks import FastGradientMethod
+from cleverhans.utils_tf import model_train, model_eval, model_loss
+from cleverhans.model import Model
 from dcgan_ops import *
 
 def conv_out_size_same(size, stride):
@@ -271,7 +275,7 @@ class BGAN(object):
         return noise_loss
 
 
-class BDCGAN(BGAN):
+class BDCGAN(BGAN, Model):
 
     def __init__(self, x_dim, z_dim, dataset_size, batch_size=64, gf_dim=64, df_dim=64, 
                  prior_std=1.0, J=1, M=1, num_classes=1, eta=2e-4, 
@@ -474,5 +478,10 @@ class BDCGAN(BGAN):
                           w=gen_params.g_h4_W, biases=gen_params.g_h4_b)
 
             return tf.nn.tanh(h4)
+            
+    #To satisfy CleverHans Model abstract class
 
+    def get_probs(self, x):
+        probs, _ = self.discriminator(x, self.K+1, reuse=True)
+        return probs
 
