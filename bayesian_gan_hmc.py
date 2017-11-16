@@ -18,7 +18,7 @@ from bgan_util import AttributeDict
 from bgan_util import print_images, MnistDataset, CelebDataset, Cifar10, SVHN, ImageNet
 from bgan_models import BDCGAN
 import sys
-sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
+sys.path.insert(0, '/home/alex/cleverhans/')
 from cleverhans.attacks import FastGradientMethod
 from cleverhans.utils_tf import model_train, model_eval
 from cleverhans.model import Model
@@ -260,9 +260,9 @@ def b_dcgan(dataset, args):
                 adv_x = fgsm.generate(x,**fgsm_params)
                 preds = dcgan.get_probs(adv_x)
                 acc = model_eval(
-                session, x, y, preds, image_batch, batch_label, args=eval_params)
-                
-            print("Adversarial loss = %2.f" % (1-acc))
+                    session, x, y, preds, image_batch, batch_label, args=eval_params)
+                print("Adversarial loss = %2.f" % (1-acc))
+
             if args.semi_supervised:
                 # get test set performance on real labels only for both GAN-based classifier and standard one
                 s_acc, ss_acc = get_test_accuracy(session, dcgan, test_image_batches, test_label_batches)
