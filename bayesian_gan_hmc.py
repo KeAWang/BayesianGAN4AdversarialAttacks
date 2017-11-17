@@ -20,7 +20,7 @@ from bgan_models import BDCGAN
 import sys
 sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
 from cleverhans.attacks import FastGradientMethod
-from cleverhans.utils_tf import model_train, model_eval
+from cleverhans.utils_tf import model_train, model_eval,model_loss
 from cleverhans.model import Model
 
 import time
@@ -138,7 +138,7 @@ def b_dcgan(dataset, args):
     dataset_size = dataset.dataset_size
 
     session = get_session()
-
+    test_x = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
     x = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
     y = tf.placeholder(tf.float32, shape=(batch_size, 10))
     if args.random_seed is not None:
@@ -154,6 +154,9 @@ def b_dcgan(dataset, args):
         fgsm_params = {'eps': 0.3,
                    'clip_min': 0.,
                    'clip_max': 1.}
+        adv_x = fgsm.generate(x,**fgsm_params)
+        adv_test_x = fgsm.generate(test_x,**fgsm_params)
+        preds = dcgan.get_probs(adv_x)
 
     print("Starting session")
     session.run(tf.global_variables_initializer())
@@ -170,6 +173,10 @@ def b_dcgan(dataset, args):
 
     if args.semi_supervised:
         test_image_batches, test_label_batches = get_test_batches(dataset, batch_size)
+        adv_set = []
+        for test_images in test_image_batches:
+            adv_set.append(session.run(adv_x, feed_dict = {x:test_images}))
+
 
         optimizer_dict = {"semi_d": dcgan.d_optim_semi_adam,
                           "sup_d": dcgan.s_optim_adam,
@@ -234,6 +241,24 @@ def b_dcgan(dataset, args):
                                         feed_dict={dcgan.z: batch_z, dcgan.g_learning_rate: learning_rate})
                 g_losses.append(g_loss)
 
+        # if args.adv_test:
+        #     probs, logits = dcgan.discriminator(adv_x,dcgan.K+1,reuse = True)
+            
+        #     labels = tf.placeholder(tf.float32,
+        #                              [args.batch_size, dcgan.K+1], name='real_targets')
+        #     compare_labels = tf.convert_to_tensor(np.array([np.append(0,i) for i in batch_label]))
+
+        #     print(session.run(model_loss(compare_labels,probs), feed_dict = {x:image_batch}))
+        # if args.adv_test:
+        #     #preds = dcgan.get_probs(adv_x)
+        #     #eval_preds = session.run(preds, feed_dict = {x:image_batch})
+        #     #print(eval_preds[0])
+        #     #adv_exs = session.run(adv_test_x, feed_dict = {x:test_image_batches})
+        #     # adv_acc = model_eval(
+        #     #     session, x, y, preds, image_batch, batch_label, args=eval_params)
+        #     # #print(session.run(model_loss(compare_labels,probs), feed_dict = {x:image_batch}))
+        #     # print("Adversarial loss = %2.f" % (1-adv_acc))
+        #     print(get_test_accuracy(session,dcgan,adv_set,test_label_batches))
 
         if train_iter > 0 and train_iter % args.n_save == 0:
 
@@ -257,12 +282,16 @@ def b_dcgan(dataset, args):
             print("Disc loss = %.2f, Gen loss = %s" % (d_loss, ", ".join(["%.2f" % gl for gl in g_losses])))
 
             if args.adv_test:
-                adv_x = fgsm.generate(x,**fgsm_params)
-                preds = dcgan.get_probs(adv_x)
-                acc = model_eval(
-                session, x, y, preds, image_batch, batch_label, args=eval_params)
-                
-            print("Adversarial loss = %2.f" % (1-acc))
+            #preds = dcgan.get_probs(adv_x)
+            #eval_preds = session.run(preds, feed_dict = {x:image_batch})
+            #print(eval_preds[0])
+            #adv_exs = session.run(adv_test_x, feed_dict = {x:test_image_batches})
+            # adv_acc = model_eval(
+            #     session, x, y, preds, image_batch, batch_label, args=eval_params)
+            # #print(session.run(model_loss(compare_labels,probs), feed_dict = {x:image_batch}))
+            # print("Adversarial loss = %2.f" % (1-adv_acc))
+                print(get_test_accuracy(session,dcgan,adv_set,test_label_batches))
+
             if args.semi_supervised:
                 # get test set performance on real labels only for both GAN-based classifier and standard one
                 s_acc, ss_acc = get_test_accuracy(session, dcgan, test_image_batches, test_label_batches)
