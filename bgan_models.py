@@ -109,9 +109,13 @@ class BGAN(object):
         self.labels = tf.placeholder(tf.float32,
                                      [self.batch_size, self.K+1], name='real_targets')
 
-
         self.z = tf.placeholder(tf.float32, [None, self.z_dim], name='z')
         #self.z_sum = histogram_summary("z", self.z) TODO looks cool
+
+        # self.fgsm = FastGradientMethod(self)
+        # self.adv_real = self.fgsm.generate(self.inputs)
+        # self.adv_labeled = self.fgsm.generate(self.labeled_inputs)
+        
 
         self.gen_param_list = []
         with tf.variable_scope("generator") as scope:
@@ -142,11 +146,13 @@ class BGAN(object):
                         
 
         self.generation = defaultdict(list)
+        self.adv_fake = []
         for gen_params in self.gen_param_list:
             self.generation["g_prior"].append(self.gen_prior(gen_params))
             self.generation["g_noise"].append(self.gen_noise(gen_params))
             self.generation["generators"].append(self.generator(self.z, gen_params))
             self.generation["gen_samplers"].append(self.sampler(self.z, gen_params))
+            #self.adv_fake.append(fgsm())
             D_, D_logits_ = self.discriminator(self.generator(self.z, gen_params), self.K+1, reuse=True)
             self.generation["d_logits"].append(D_logits_)
             self.generation["d_probs"].append(D_)
