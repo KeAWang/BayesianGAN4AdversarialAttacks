@@ -121,13 +121,43 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
-    print(len(not_fake))
+    print("Test images discriminator thinks are not fake:" + str(len(not_fake)))
     semi_sup_acc = (100. * np.sum(np.argmax(test_d_logits[not_fake], 1) == np.argmax(test_lbls[not_fake], 1) + 1))\
                    / len(not_fake)
     sup_acc = (100. * np.sum(np.argmax(test_s_logits, 1) == np.argmax(test_lbls, 1)))\
               / test_lbls.shape[0]
 
     return sup_acc, semi_sup_acc
+
+def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
+
+    # only need this function because bdcgan has a fixed batch size for *everything*
+    # test_size is in number of batches
+    all_d_logits, all_s_logits = [], []
+    for test_image_batch, test_lbls in zip(all_test_img_batches, all_test_lbls):
+        test_d_logits = session.run(dcgan.test_D_logits,
+                                                   feed_dict={dcgan.test_inputs: test_image_batch})
+        all_d_logits.append(test_d_logits)
+
+    test_d_logits = np.concatenate(all_d_logits)
+    test_lbls = np.concatenate(all_test_lbls)
+
+    print(test_d_logits.shape)
+
+    not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
+    if len(not_fake) < 10:
+        print("WARNING: not enough samples for SS results")
+    print("Adversarial images discriminator thinks are not fake:" + str(len(not_fake)))
+    semi_sup_acc = (100. * np.sum(np.argmax(test_d_logits[not_fake], 1) == np.argmax(test_lbls[not_fake], 1) + 1))\
+                   / len(not_fake)
+    semi_sup_acc_unfilter = (100. * np.sum(np.argmax(test_d_logits[:,1:], 1) == np.argmax(test_lbls, 1)))\
+                   / len(test_d_logits)
+
+    return semi_sup_acc, semi_sup_acc_unfilter
+
+
+
+
     
 
 
@@ -259,6 +289,7 @@ def b_dcgan(dataset, args):
         #     # #print(session.run(model_loss(compare_labels,probs), feed_dict = {x:image_batch}))
         #     # print("Adversarial loss = %2.f" % (1-adv_acc))
         #     print(get_test_accuracy(session,dcgan,adv_set,test_label_batches))
+
         if train_iter > 0 and train_iter % args.n_save == 0:
             print("Iter %i" % train_iter)
             # collect samples
@@ -305,11 +336,11 @@ def b_dcgan(dataset, args):
                     adv_set = []
                     for test_images in test_image_batches:
                         adv_set.append(session.run(adv_x, feed_dict = {x:test_images}))
-                    adv_sup_acc, adv_ss_acc = get_test_accuracy(session,dcgan,adv_set,test_label_batches)
-                    print("Adversarial supervised accuracy %.2f" % adv_sup_acc)
+                    adv_sup_acc, adv_ss_acc = get_adv_test_accuracy(session,dcgan,adv_set,test_label_batches)
+                    print("Adversarial semi-sup accuracy with filter: %.2f" % adv_sup_acc)
                     print("Adverarial semi-sup accuracy: %.2f" % adv_ss_acc)
-                print("Sup classification acc: %.2f" % (s_acc))
-                print("Semi-sup classification acc: %.2f" % (ss_acc))
+                print("Supervised acc: %.2f" % (s_acc))
+                print("Semi-sup acc: %.2f" % (ss_acc))
 
             print("saving results and samples")
 
