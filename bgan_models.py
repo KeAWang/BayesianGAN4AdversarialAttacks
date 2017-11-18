@@ -488,6 +488,7 @@ class BDCGAN(BGAN, Model):
     #To satisfy CleverHans Model abstract class
 
     def get_probs(self, x):
+        #probs = self.test_D
         probs, _ = self.discriminator(x, self.K+1, reuse=True)
         return probs
 

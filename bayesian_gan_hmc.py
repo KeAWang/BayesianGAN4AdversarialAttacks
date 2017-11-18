@@ -121,6 +121,7 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
+    print(len(not_fake))
     semi_sup_acc = (100. * np.sum(np.argmax(test_d_logits[not_fake], 1) == np.argmax(test_lbls[not_fake], 1) + 1))\
                    / len(not_fake)
     sup_acc = (100. * np.sum(np.argmax(test_s_logits, 1) == np.argmax(test_lbls, 1)))\
@@ -147,7 +148,7 @@ def b_dcgan(dataset, args):
     dcgan = BDCGAN(x_dim, z_dim, dataset_size, batch_size=batch_size, J=args.J, M=args.M, 
                    lr=args.lr, optimizer=args.optimizer, gen_observed=args.gen_observed,
                    num_classes=dataset.num_classes if args.semi_supervised else 1)
-    if args.adv_test:
+    if args.adv_test and args.semi_supervised:
         fgsm = FastGradientMethod(dcgan, sess=session)
         dcgan.adv_constructor = fgsm
         eval_params = {'batch_size': batch_size}
@@ -157,6 +158,8 @@ def b_dcgan(dataset, args):
         adv_x = fgsm.generate(x,**fgsm_params)
         adv_test_x = fgsm.generate(test_x,**fgsm_params)
         preds = dcgan.get_probs(adv_x)
+
+    #elif args.adv_test:
 
     print("Starting session")
     session.run(tf.global_variables_initializer())
@@ -173,9 +176,6 @@ def b_dcgan(dataset, args):
 
     if args.semi_supervised:
         test_image_batches, test_label_batches = get_test_batches(dataset, batch_size)
-        adv_set = []
-        for test_images in test_image_batches:
-            adv_set.append(session.run(adv_x, feed_dict = {x:test_images}))
 
 
         optimizer_dict = {"semi_d": dcgan.d_optim_semi_adam,
@@ -259,9 +259,7 @@ def b_dcgan(dataset, args):
         #     # #print(session.run(model_loss(compare_labels,probs), feed_dict = {x:image_batch}))
         #     # print("Adversarial loss = %2.f" % (1-adv_acc))
         #     print(get_test_accuracy(session,dcgan,adv_set,test_label_batches))
-
         if train_iter > 0 and train_iter % args.n_save == 0:
-
             print("Iter %i" % train_iter)
             # collect samples
             if args.save_samples: # saving samples
@@ -281,7 +279,7 @@ def b_dcgan(dataset, args):
 
             print("Disc loss = %.2f, Gen loss = %s" % (d_loss, ", ".join(["%.2f" % gl for gl in g_losses])))
 
-            if args.adv_test:
+            #if args.adv_test:
             #preds = dcgan.get_probs(adv_x)
             #eval_preds = session.run(preds, feed_dict = {x:image_batch})
             #print(eval_preds[0])
@@ -290,12 +288,26 @@ def b_dcgan(dataset, args):
             #     session, x, y, preds, image_batch, batch_label, args=eval_params)
             # #print(session.run(model_loss(compare_labels,probs), feed_dict = {x:image_batch}))
             # print("Adversarial loss = %2.f" % (1-adv_acc))
-                print(get_test_accuracy(session,dcgan,adv_set,test_label_batches))
+                #print(get_test_accuracy(session,dcgan,adv_set,test_label_batches))
+
+                # adv_x = fgsm.generate(x,**fgsm_params)
+                # preds = dcgan.get_probs(adv_x)
+                # acc = model_eval(
+                #     session, x, y, preds, image_batch, batch_label, args=eval_params)
+                # print("Adversarial loss = %2.f" % (1-acc))
+
 
             if args.semi_supervised:
                 # get test set performance on real labels only for both GAN-based classifier and standard one
-                s_acc, ss_acc = get_test_accuracy(session, dcgan, test_image_batches, test_label_batches)
 
+                s_acc, ss_acc = get_test_accuracy(session, dcgan, test_image_batches, test_label_batches)
+                if args.adv_test:
+                    adv_set = []
+                    for test_images in test_image_batches:
+                        adv_set.append(session.run(adv_x, feed_dict = {x:test_images}))
+                    adv_sup_acc, adv_ss_acc = get_test_accuracy(session,dcgan,adv_set,test_label_batches)
+                    print("Adversarial supervised accuracy %.2f" % adv_sup_acc)
+                    print("Adverarial semi-sup accuracy: %.2f" % adv_ss_acc)
                 print("Sup classification acc: %.2f" % (s_acc))
                 print("Semi-sup classification acc: %.2f" % (ss_acc))
 
