@@ -150,7 +150,7 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     print("Adversarial images discriminator thinks are not fake:" + str(len(not_fake)))
     semi_sup_acc = (100. * np.sum(np.argmax(test_d_logits[not_fake], 1) == np.argmax(test_lbls[not_fake], 1) + 1))\
                    / len(not_fake)
-    semi_sup_acc_unfilter = (100. * np.sum(np.argmax(test_d_logits[:,1:], 1) == np.argmax(test_lbls, 1) + 1))\
+    semi_sup_acc_unfilter = (100. * np.sum(np.argmax(test_d_logits[:,1:], 1) == np.argmax(test_lbls, 1)))\
                    / len(test_d_logits)
 
     return semi_sup_acc, semi_sup_acc_unfilter
@@ -289,6 +289,7 @@ def b_dcgan(dataset, args):
         #     # #print(session.run(model_loss(compare_labels,probs), feed_dict = {x:image_batch}))
         #     # print("Adversarial loss = %2.f" % (1-adv_acc))
         #     print(get_test_accuracy(session,dcgan,adv_set,test_label_batches))
+
         if train_iter > 0 and train_iter % args.n_save == 0:
             print("Iter %i" % train_iter)
             # collect samples
