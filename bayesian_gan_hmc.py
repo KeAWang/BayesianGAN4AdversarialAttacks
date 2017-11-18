@@ -142,13 +142,15 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     test_d_logits = np.concatenate(all_d_logits)
     test_lbls = np.concatenate(all_test_lbls)
 
+    print(test_d_logits.shape)
+
     not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
     print("Adversarial images discriminator thinks are not fake:" + str(len(not_fake)))
     semi_sup_acc = (100. * np.sum(np.argmax(test_d_logits[not_fake], 1) == np.argmax(test_lbls[not_fake], 1) + 1))\
                    / len(not_fake)
-    semi_sup_acc_unfilter = (100. * np.sum(np.argmax(test_d_logits, 1) == np.argmax(test_lbls, 1) + 1))\
+    semi_sup_acc_unfilter = (100. * np.sum(np.argmax(test_d_logits[:,1:], 1) == np.argmax(test_lbls, 1) + 1))\
                    / len(test_d_logits)
 
     return semi_sup_acc, semi_sup_acc_unfilter
