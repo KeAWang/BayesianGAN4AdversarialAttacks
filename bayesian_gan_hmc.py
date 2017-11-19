@@ -142,7 +142,6 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     test_d_logits = np.concatenate(all_d_logits)
     test_lbls = np.concatenate(all_test_lbls)
 
-    print(test_d_logits.shape)
 
     not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     if len(not_fake) < 10:
@@ -155,7 +154,20 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
 
     return semi_sup_acc, semi_sup_acc_unfilter
 
+def get_certainty_for_adv(session, dcgan, all_test_img_batches,all_test_lbls):
 
+    all_d = []
+    for test_image_batch, test_lbls in zip(all_test_img_batches, all_test_lbls):
+        test_d = session.run(dcgan.test_D,
+                                                   feed_dict={dcgan.test_inputs: test_image_batch})
+        all_d.append(test_d)
+
+    test_d = np.concatenate(all_d)
+    test_lbls = np.concatenate(all_test_lbls)
+
+    correct_certainty = np.mean([i[0] for i,j in zip(test_d,test_lbls) if np.argmax(i[1:]) == np.argmax(j)])
+    uncorrect_certainty = np.mean([i[0] for i,j in zip(test_d,test_lbls) if np.argmax(i[1:]) != np.argmax(j)])
+    return correct_certainty, uncorrect_certainty
 
 
     
@@ -172,6 +184,9 @@ def b_dcgan(dataset, args):
     test_x = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
     x = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
     y = tf.placeholder(tf.float32, shape=(batch_size, 10))
+
+    unlabeled_batch_ph= tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
+    labeled_image_ph = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
     if args.random_seed is not None:
 	    tf.set_random_seed(args.random_seed)
     # due to how much the TF code sucks all functions take fixed batch_size at all times
@@ -188,8 +203,15 @@ def b_dcgan(dataset, args):
         adv_x = fgsm.generate(x,**fgsm_params)
         adv_test_x = fgsm.generate(test_x,**fgsm_params)
         preds = dcgan.get_probs(adv_x)
-
     #elif args.adv_test:
+    if args.adv_training:
+        unlabeled_targets = np.zeros([batch_size,dcgan.K+1])
+        unlabeled_targets[:,0] = 1
+        fgsm_targeted_params = {'eps': 0.3,
+                   'clip_min': 0.,
+                   'clip_max': 1.,
+                    'y_target': unlabeled_targets
+                   }
 
     print("Starting session")
     session.run(tf.global_variables_initializer())
@@ -237,16 +259,25 @@ def b_dcgan(dataset, args):
 
         batch_z = np.random.uniform(-1, 1, [batch_size, z_dim])
         image_batch, batch_label = dataset.next_batch(batch_size, class_id=None)
-        
+        batch_targets = np.zeros([batch_size,11])
+        batch_targets[:,0] = 1
+
+
         if args.semi_supervised:
 
+
             labeled_image_batch, labels = next(supervised_batches)
+            adv_labeled = session.run(fgsm.generate(labeled_image_ph,**fgsm_targeted_params), feed_dict = {labeled_image_ph:labeled_image_batch})
+            adv_unlabeled = session.run(fgsm.generate(unlabeled_batch_ph,**fgsm_params),feed_dict = {unlabeled_batch_ph:image_batch})
            
             _, d_loss = session.run([optimizer_dict["semi_d"], dcgan.d_loss_semi], feed_dict={dcgan.labeled_inputs: labeled_image_batch,
                                                                                               dcgan.labels: get_gan_labels(labels),
                                                                                               dcgan.inputs: image_batch,
                                                                                               dcgan.z: batch_z,
-                                                                                              dcgan.d_semi_learning_rate: learning_rate})
+                                                                                              dcgan.d_semi_learning_rate: learning_rate,
+                                                                                              dcgan.adv_unlab: adv_unlabeled,
+                                                                                              dcgan.adv_labeled: adv_labeled
+                                                                                              })
 
             _, s_loss = session.run([optimizer_dict["sup_d"], dcgan.s_loss], feed_dict={dcgan.inputs: labeled_image_batch,
                                                                                         dcgan.lbls: labels})
@@ -337,8 +368,11 @@ def b_dcgan(dataset, args):
                     for test_images in test_image_batches:
                         adv_set.append(session.run(adv_x, feed_dict = {x:test_images}))
                     adv_sup_acc, adv_ss_acc = get_adv_test_accuracy(session,dcgan,adv_set,test_label_batches)
+                    correct_certainty, incorrect_certainty = get_certainty_for_adv(session,dcgan,adv_set,test_label_batches)
                     print("Adversarial semi-sup accuracy with filter: %.2f" % adv_sup_acc)
                     print("Adverarial semi-sup accuracy: %.2f" % adv_ss_acc)
+                    print("Uncertainty for correct predictions: %.2f" % correct_certainty)
+                    print("Uncertainty for incorrect predictions: %.2f" % incorrect_certainty)
                 print("Supervised acc: %.2f" % (s_acc))
                 print("Semi-sup acc: %.2f" % (ss_acc))
 
@@ -348,6 +382,8 @@ def b_dcgan(dataset, args):
                        "gen_losses": list(map(float, g_losses))}
             if args.semi_supervised:
                 results["supervised_acc"] = float(s_acc)
+                results['adversarial_filtered_semi_supervised_acc'] = float(adv_sup_acc)
+                results["adversarial_unfilted_semi_supervised_acc"] = float(adv_ss_acc)
                 results["semi_supervised_acc"] = float(ss_acc)
                 results["timestamp"] = time.time()
 
@@ -448,6 +484,10 @@ if __name__ == "__main__":
     parser.add_argument('--adv_test',
                         action="store_true",
                         help="do adv testing")
+
+    parser.add_argument('--adv_training',
+                        action="store_true",
+                        help="adversarial training")
 
     parser.add_argument('--wasserstein',
                         action="store_true",
