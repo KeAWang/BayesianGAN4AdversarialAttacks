@@ -99,23 +99,47 @@ class BGAN(object):
 
 
     def build_bgan_graph(self):
-    
+
+        y = np.zeros([self.batch_size,self.K+1])
+        y[:,0] = 1
+        self.fgsm_params = {'eps': 0.3,
+                   'clip_min': 0.,
+                   'clip_max': 1.,
+                   }
+        if self.K > 1:
+            self.fgsm_unlab_params = {'eps': 0.3,
+                   'clip_min': 0.,
+                   'clip_max': 1.,
+                   'y_target': y
+                   }
+
+        self.fgsm = FastGradientMethod(self)
+
         self.inputs = tf.placeholder(tf.float32,
                                      [self.batch_size] + self.x_dim, name='real_images')
-        
+
+        self.adv_inputs = tf.placeholder(tf.float32,
+                                     [self.batch_size] + self.x_dim, name='adversarial')
+
+
         self.labeled_inputs = tf.placeholder(tf.float32,
                                              [self.batch_size] + self.x_dim, name='real_images_w_labels')
         
         self.labels = tf.placeholder(tf.float32,
                                      [self.batch_size, self.K+1], name='real_targets')
 
-        self.z = tf.placeholder(tf.float32, [None, self.z_dim], name='z')
-        #self.z_sum = histogram_summary("z", self.z) TODO looks cool
+        self.targets = tf.placeholder(tf.float32,
+                                     [self.batch_size, self.K+1], name='targets')
 
-        # self.fgsm = FastGradientMethod(self)
-        # self.adv_real = self.fgsm.generate(self.inputs)
-        # self.adv_labeled = self.fgsm.generate(self.labeled_inputs)
-        
+        self.z = tf.placeholder(tf.float32, [None, self.z_dim], name='z')
+
+        self.adv_unlab = tf.placeholder(tf.float32,
+                                     [self.batch_size] + self.x_dim, name='adversarial_images_wo_labels')
+
+        self.adv_labeled = tf.placeholder(tf.float32,
+                                             [self.batch_size] + self.x_dim, name='real_images_w_labels')
+
+        #self.z_sum = histogram_summary("z", self.z) TODO looks cool
 
         self.gen_param_list = []
         with tf.variable_scope("generator") as scope:
@@ -126,9 +150,13 @@ class BGAN(object):
                         gen_params[name] = tf.get_variable("%s_%04d_%04d" % (name, gi, m),
                                                            shape, initializer=tf.random_normal_initializer(stddev=0.02))
                     self.gen_param_list.append(gen_params)
+        # self.adv_labeled_inputs = self.fgsm.generate(self.labeled_inputs,**self.fgsm_params)
+        # self.adv_unlab_inputs = self.fgsm.generate(self.inputs,**self.fgsm_unlab_params)
 
         self.D, self.D_logits = self.discriminator(self.inputs, self.K+1)
         self.Dsup, self.Dsup_logits = self.discriminator(self.labeled_inputs, self.K+1, reuse=True)
+        self.D_advlab, self.D_advlab_logits = self.discriminator(self.adv_labeled, self.K+1, reuse = True)
+        self.D_advunlab, self.D_advunlab_logits = self.discriminator(self.adv_unlab, self.K+1, reuse = True)
 
         if self.K == 1:
             if self.wasserstein:
@@ -143,6 +171,9 @@ class BGAN(object):
             self.d_loss_sup = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.Dsup_logits,
                                                                                      labels=self.labels))    
             self.d_loss_real = -tf.reduce_mean(tf.log((1.0 - self.D[:, 0]) + 1e-8))
+            self.d_loss_advlab = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.D_advlab_logits,
+                                                                                     labels=self.labels))
+            self.d_loss_advunlab = -tf.reduce_mean(tf.log((1.0 - self.D_advunlab[:, 0]) + 1e-8))
                         
 
         self.generation = defaultdict(list)

@@ -133,9 +133,9 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
 
     # only need this function because bdcgan has a fixed batch size for *everything*
     # test_size is in number of batches
-    all_d_logits, all_s_logits = [], []
+    all_d_logits, all_s_logits, all_d = [], [], []
     for test_image_batch, test_lbls in zip(all_test_img_batches, all_test_lbls):
-        test_d_logits, test_d = session.run([dcgan.test_D_logits,dcgan.test_D]
+        test_d_logits, test_d = session.run([dcgan.test_D_logits,dcgan.test_D],
                                                    feed_dict={dcgan.test_inputs: test_image_batch})
         all_d_logits.append(test_d_logits)
         all_d.append(test_d)
@@ -374,8 +374,8 @@ def b_dcgan(dataset, args):
                     adv_sup_acc, adv_ss_acc,correct_uncertainty, incorrect_uncertainty = get_adv_test_accuracy(session,dcgan,adv_set,test_label_batches)
                     print("Adversarial semi-sup accuracy with filter: %.2f" % adv_sup_acc)
                     print("Adverarial semi-sup accuracy: %.2f" % adv_ss_acc)
-                    print("Uncertainty for correct predictions: %.2f" % correct_certainty)
-                    print("Uncertainty for incorrect predictions: %.2f" % incorrect_certainty)
+                    print("Uncertainty for correct predictions: %.2f" % correct_uncertainty)
+                    print("Uncertainty for incorrect predictions: %.2f" % incorrect_uncertainty)
                 print("Supervised acc: %.2f" % (s_acc))
                 print("Semi-sup acc: %.2f" % (ss_acc))
 
