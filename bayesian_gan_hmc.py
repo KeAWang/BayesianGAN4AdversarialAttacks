@@ -135,10 +135,11 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     # test_size is in number of batches
     all_d_logits, all_s_logits = [], []
     for test_image_batch, test_lbls in zip(all_test_img_batches, all_test_lbls):
-        test_d_logits = session.run(dcgan.test_D_logits,
+        test_d_logits, test_d = session.run([dcgan.test_D_logits,dcgan.test_D]
                                                    feed_dict={dcgan.test_inputs: test_image_batch})
         all_d_logits.append(test_d_logits)
-
+        all_d.append(test_d)
+    test_d = np.concatenate(all_d)
     test_d_logits = np.concatenate(all_d_logits)
     test_lbls = np.concatenate(all_test_lbls)
 
@@ -152,7 +153,10 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     semi_sup_acc_unfilter = (100. * np.sum(np.argmax(test_d_logits[:,1:], 1) == np.argmax(test_lbls, 1)))\
                    / len(test_d_logits)
 
-    return semi_sup_acc, semi_sup_acc_unfilter
+    correct_certainty = np.mean([i[0] for i,j in zip(test_d,test_lbls) if np.argmax(i[1:]) == np.argmax(j)])
+    uncorrect_certainty = np.mean([i[0] for i,j in zip(test_d,test_lbls) if np.argmax(i[1:]) != np.argmax(j)])
+
+    return semi_sup_acc, semi_sup_acc_unfilter, correct_certainty, uncorrect_certainty
 
 def get_certainty_for_adv(session, dcgan, all_test_img_batches,all_test_lbls):
 
@@ -367,8 +371,7 @@ def b_dcgan(dataset, args):
                     adv_set = []
                     for test_images in test_image_batches:
                         adv_set.append(session.run(adv_x, feed_dict = {x:test_images}))
-                    adv_sup_acc, adv_ss_acc = get_adv_test_accuracy(session,dcgan,adv_set,test_label_batches)
-                    correct_certainty, incorrect_certainty = get_certainty_for_adv(session,dcgan,adv_set,test_label_batches)
+                    adv_sup_acc, adv_ss_acc,correct_uncertainty, incorrect_uncertainty = get_adv_test_accuracy(session,dcgan,adv_set,test_label_batches)
                     print("Adversarial semi-sup accuracy with filter: %.2f" % adv_sup_acc)
                     print("Adverarial semi-sup accuracy: %.2f" % adv_ss_acc)
                     print("Uncertainty for correct predictions: %.2f" % correct_certainty)
@@ -381,6 +384,8 @@ def b_dcgan(dataset, args):
             results = {"disc_loss": float(d_loss),
                        "gen_losses": list(map(float, g_losses))}
             if args.semi_supervised:
+                results["adversarial_uncertainty_correct"] = float(correct_uncertainty)
+                results["adversarial_uncertainty_incorrect"] = float(incorrect_uncertainty)
                 results["supervised_acc"] = float(s_acc)
                 results['adversarial_filtered_semi_supervised_acc'] = float(adv_sup_acc)
                 results["adversarial_unfilted_semi_supervised_acc"] = float(adv_ss_acc)
