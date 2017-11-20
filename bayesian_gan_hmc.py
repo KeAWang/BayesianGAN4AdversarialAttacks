@@ -183,9 +183,6 @@ def b_dcgan(dataset, args):
     x_dim = dataset.x_dim
     batch_size = args.batch_size
     dataset_size = dataset.dataset_size
-    
-    with tf.get_default_graph() as _:
-        saver = tf.train.Saver()
 
     session = get_session()
 
@@ -212,7 +209,7 @@ def b_dcgan(dataset, args):
         adv_x = fgsm.generate(x,**fgsm_params)
         adv_test_x = fgsm.generate(test_x,**fgsm_params)
         preds = dcgan.get_probs(adv_x)
-    if args.adv_training:
+    if args.adv_train:
         unlabeled_targets = np.zeros([batch_size,dcgan.K+1])
         unlabeled_targets[:,0] = 1
         fgsm_targeted_params = {'eps': args.eps,
@@ -220,6 +217,8 @@ def b_dcgan(dataset, args):
                    'clip_max': 1.,
                     'y_target': unlabeled_targets
                    }
+
+    saver = tf.train.Saver()
 
     print("Starting session")
     session.run(tf.global_variables_initializer())
@@ -515,12 +514,8 @@ if __name__ == "__main__":
                         help="do adv testing")
 
     parser.add_argument('--adv_train',
-                        action="store_false",
-                        help="do adv training")
-
-    parser.add_argument('--adv_training',
                         action="store_true",
-                        help="adversarial training")
+                        help="do adv training")
 
     parser.add_argument('--wasserstein',
                         action="store_true",
@@ -545,7 +540,7 @@ if __name__ == "__main__":
                         help="number of iterations per checkpoint")
 
     parser.add_argument('--load_chkpt',
-                        action="store_false",
+                        action="store_true",
                         help="whether to load from a checkpoint")
 
     parser.add_argument('--chkpt',

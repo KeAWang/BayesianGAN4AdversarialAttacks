@@ -209,8 +209,8 @@ class BGAN(object):
             self.d_loss += self.disc_prior() + self.disc_noise()
         if self.K > 1:
             num_fake = self.num_gen*self.num_mcmc
-            num_sup = batch_size
-            num_unsup = batch_size
+            num_sup = self.batch_size
+            num_unsup = self.batch_size
             num_adv = num_sup+num_unsup
             if self.adv_train:
                 self.d_loss_semi = (self.d_loss_sup + self.d_loss_real + self.d_loss_fake + self.lam*(self.d_loss_advlab + self.d_loss_advunlab))\
@@ -328,10 +328,13 @@ class BDCGAN(BGAN, Model):
 
     def __init__(self, x_dim, z_dim, dataset_size, batch_size=64, gf_dim=64, df_dim=64, 
                  prior_std=1.0, J=1, M=1, num_classes=1, eta=2e-4, 
-                 alpha=0.01, lr=0.0002, optimizer='adam', wasserstein=False, 
+                 alpha=0.01, lr=0.0002, optimizer='adam', wasserstein=False,
+                 adv_train=False,
                  ml=False, gen_observed=1000):
 
         assert len(x_dim) == 3, "invalid image dims"
+
+        self.adv_train=adv_train
         
         c_dim = x_dim[2]
         self.is_grayscale = (c_dim == 1)
