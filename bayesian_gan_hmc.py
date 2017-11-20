@@ -18,7 +18,7 @@ from bgan_util import AttributeDict
 from bgan_util import print_images, MnistDataset, CelebDataset, Cifar10, SVHN, ImageNet
 from bgan_models import BDCGAN
 import sys
-sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
+sys.path.insert(0, '/home/alex/cleverhans')
 from cleverhans.attacks import FastGradientMethod
 from cleverhans.utils_tf import model_train, model_eval,model_loss
 from cleverhans.model import Model
@@ -254,7 +254,7 @@ def b_dcgan(dataset, args):
     base_learning_rate = args.lr # for now we use same learning rate for Ds and Gs
     lr_decay_rate = args.lr_decay
 
-    for train_iter in range(prev_iters, num_train_iter):
+    for train_iter in range(1+prev_iters, 1+num_train_iter):
 
         if train_iter == 5000:
             print("Switching to user-specified optimizer")
