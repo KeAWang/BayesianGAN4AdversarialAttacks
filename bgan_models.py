@@ -203,8 +203,8 @@ class BGAN(object):
         t_vars = tf.trainable_variables()
         self.d_vars = [var for var in t_vars if 'd_' in var.name]
 
-        self.d_loss = (self.d_loss_real + self.d_loss_fake + self.lam*(self.d_loss_advlab + self.d_loss_advunlab))\
-                        /(self.batch_size*2+self.lam*2*self.batch_size)
+        self.d_loss = (self.d_loss_real + self.d_loss_fake)
+
         if not self.ml:
             self.d_loss += self.disc_prior() + self.disc_noise()
         if self.K > 1:
