@@ -183,11 +183,11 @@ def b_dcgan(dataset, args):
     x_dim = dataset.x_dim
     batch_size = args.batch_size
     dataset_size = dataset.dataset_size
-    save_chkpt = args.save_chkpt
-    load_chkpt = args.load_chkpt
-    load_chkpt_name = args.load_chkpt_name
+    
+    saver = tf.train.Saver()
 
     session = get_session()
+
     test_x = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
     x = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
     y = tf.placeholder(tf.float32, shape=(batch_size, 10))
@@ -198,7 +198,8 @@ def b_dcgan(dataset, args):
 	    tf.set_random_seed(args.random_seed)
     # due to how much the TF code sucks all functions take fixed batch_size at all times
     dcgan = BDCGAN(x_dim, z_dim, dataset_size, batch_size=batch_size, J=args.J, M=args.M, 
-                   lr=args.lr, optimizer=args.optimizer, gen_observed=args.gen_observed, adv_train=args.adv_train
+                   lr=args.lr, optimizer=args.optimizer,
+                   gen_observed=args.gen_observed, adv_train=args.adv_train,
                    num_classes=dataset.num_classes if args.semi_supervised else 1)
     if args.adv_test and args.semi_supervised:
         fgsm = FastGradientMethod(dcgan, sess=session)
@@ -222,8 +223,14 @@ def b_dcgan(dataset, args):
     print("Starting session")
     session.run(tf.global_variables_initializer())
 
+    prev_iters = 0
+    if args.load_chkpt:
+        saver.restore(session, args.chkpt)
+        # Assume checkpoint is of the form "model_300"
+        prev_iters = int(args.chkpt.split('/')[-1].split('_')[1])
+        print("Model restored from iteration:", prev_iters)
+
     print("Starting training loop")
-        
     num_train_iter = args.train_iter
 
     if hasattr(dataset, "supervised_batches"):
@@ -247,7 +254,7 @@ def b_dcgan(dataset, args):
     base_learning_rate = args.lr # for now we use same learning rate for Ds and Gs
     lr_decay_rate = args.lr_decay
 
-    for train_iter in range(num_train_iter):
+    for train_iter in range(prev_iters, num_train_iter):
 
         if train_iter == 5000:
             print("Switching to user-specified optimizer")
@@ -393,6 +400,7 @@ def b_dcgan(dataset, args):
                 results["adversarial_unfilted_semi_supervised_acc"] = float(adv_ss_acc)
                 results["semi_supervised_acc"] = float(ss_acc)
                 results["timestamp"] = time.time()
+                results["previous_chkpt"] = args.chkpt
 
             with open(os.path.join(args.out_dir, 'results_%i.json' % train_iter), 'w') as fp:
                 json.dump(results, fp)
@@ -416,8 +424,10 @@ def b_dcgan(dataset, args):
 
             print("Done saving weights")
 
-        if train_iter > 0 and train_iter%save_chkpt == 0:
-            print("Checkpointing...") #TODO
+        if train_iter > 0 and train_iter%args.save_chkpt == 0:
+            save_path = saver.save(session, os.path.join(args.out_dir,
+                                                         "model_%i" % train_iter))
+            print("Model checkpointed in file: %s" % save_path)
             
  
     session.close()    
@@ -523,7 +533,7 @@ if __name__ == "__main__":
     parser.add_argument('--save_samples',
                         action="store_true",
                         help="whether to save generated samples")
-    
+
     parser.add_argument('--save_weights',
                         action="store_true",
                         help="whether to save weights")
@@ -534,10 +544,10 @@ if __name__ == "__main__":
                         help="number of iterations per checkpoint")
 
     parser.add_argument('--load_chkpt',
-                        action="store_false"
+                        action="store_false",
                         help="whether to load from a checkpoint")
 
-    parser.add_argument('--load_chkpt_name',
+    parser.add_argument('--chkpt',
                         type=str,
                         default='',
                         help="name of checkpoint to load")
@@ -546,7 +556,7 @@ if __name__ == "__main__":
                         type=int,
                         default=None,
                         help="random seed")
-    
+
     parser.add_argument('--lr',
                         type=float,
                         default=0.005,
