@@ -99,15 +99,16 @@ class BGAN(object):
 
 
     def build_bgan_graph(self):
-
+        self.eps = .25
+        self.lam = .3
         y = np.zeros([self.batch_size,self.K+1])
         y[:,0] = 1
-        self.fgsm_params = {'eps': 0.3,
+        self.fgsm_params = {'eps': self.eps,
                    'clip_min': 0.,
                    'clip_max': 1.,
                    }
         if self.K > 1:
-            self.fgsm_unlab_params = {'eps': 0.3,
+            self.fgsm_unlab_params = {'eps': self.eps,
                    'clip_min': 0.,
                    'clip_max': 1.,
                    'y_target': y
@@ -201,11 +202,17 @@ class BGAN(object):
         t_vars = tf.trainable_variables()
         self.d_vars = [var for var in t_vars if 'd_' in var.name]
 
-        self.d_loss = self.d_loss_real + self.d_loss_fake
+        self.d_loss = (self.d_loss_real + self.d_loss_fake + self.lam*(self.d_loss_advlab + self.d_loss_advunlab))\
+                        /(self.batch_size*2+self.lam*2*self.batch_size)
         if not self.ml:
             self.d_loss += self.disc_prior() + self.disc_noise()
         if self.K > 1:
-            self.d_loss_semi = self.d_loss_sup + self.d_loss_real + self.d_loss_fake
+            num_fake = self.num_gen*self.num_mcmc
+            num_sup = batch_size
+            num_unsup = batch_size
+            num_adv = num_sup+num_unsup
+            self.d_loss_semi = (self.d_loss_sup + self.d_loss_real + self.d_loss_fake + self.lam*(self.d_loss_advlab + self.d_loss_advunlab))\
+                                    /(num_sup+num_unsup+num_fake+self.lam*num_adv)
             if not self.ml:
                 self.d_loss_semi += self.disc_prior() + self.disc_noise()
 
