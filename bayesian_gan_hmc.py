@@ -183,6 +183,9 @@ def b_dcgan(dataset, args):
     x_dim = dataset.x_dim
     batch_size = args.batch_size
     dataset_size = dataset.dataset_size
+    save_chkpt = args.save_chkpt
+    load_chkpt = args.load_chkpt
+    load_chkpt_name = args.load_chkpt_name
 
     session = get_session()
     test_x = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
@@ -411,8 +414,13 @@ def b_dcgan(dataset, args):
                                     **var_dict)
             
 
-            print("done")
-        
+            print("Done saving weights")
+
+        if train_iter > 0 and train_iter%save_chkpt == 0:
+            print("Checkpointing...") #TODO
+            
+ 
+    session.close()    
 
 
 if __name__ == "__main__":
@@ -514,11 +522,25 @@ if __name__ == "__main__":
 
     parser.add_argument('--save_samples',
                         action="store_true",
-                        help="wether to save generated samples")
+                        help="whether to save generated samples")
     
     parser.add_argument('--save_weights',
                         action="store_true",
-                        help="wether to save weights")
+                        help="whether to save weights")
+
+    parser.add_argument('--save_chkpt',
+                        type=int,
+                        default=200,
+                        help="number of iterations per checkpoint")
+
+    parser.add_argument('--load_chkpt',
+                        action="store_false"
+                        help="whether to load from a checkpoint")
+
+    parser.add_argument('--load_chkpt_name',
+                        type=str,
+                        default='',
+                        help="name of checkpoint to load")
 
     parser.add_argument('--random_seed',
                         type=int,
