@@ -18,7 +18,7 @@ from bgan_util import AttributeDict
 from bgan_util import print_images, MnistDataset, CelebDataset, Cifar10, SVHN, ImageNet
 from bgan_models import BDCGAN
 import sys
-sys.path.insert(0, '/home/alex/cleverhans')
+sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
 from cleverhans.attacks import FastGradientMethod
 from cleverhans.utils_tf import model_train, model_eval,model_loss
 from cleverhans.model import Model
@@ -277,20 +277,25 @@ def b_dcgan(dataset, args):
 
 
         if args.semi_supervised:
-
-
             labeled_image_batch, labels = next(supervised_batches)
-            adv_labeled = session.run(fgsm.generate(labeled_image_ph,**fgsm_targeted_params), feed_dict = {labeled_image_ph:labeled_image_batch})
-            adv_unlabeled = session.run(fgsm.generate(unlabeled_batch_ph,**fgsm_params),feed_dict = {unlabeled_batch_ph:image_batch})
-           
-            _, d_loss = session.run([optimizer_dict["semi_d"], dcgan.d_loss_semi], feed_dict={dcgan.labeled_inputs: labeled_image_batch,
-                                                                                              dcgan.labels: get_gan_labels(labels),
-                                                                                              dcgan.inputs: image_batch,
-                                                                                              dcgan.z: batch_z,
-                                                                                              dcgan.d_semi_learning_rate: learning_rate,
-                                                                                              dcgan.adv_unlab: adv_unlabeled,
-                                                                                              dcgan.adv_labeled: adv_labeled
-                                                                                              })
+            if args.adv_train:
+                adv_labeled = session.run(fgsm.generate(labeled_image_ph,**fgsm_targeted_params), feed_dict = {labeled_image_ph:labeled_image_batch})
+                adv_unlabeled = session.run(fgsm.generate(unlabeled_batch_ph,**fgsm_params),feed_dict = {unlabeled_batch_ph:image_batch})
+                _, d_loss = session.run([optimizer_dict["semi_d"], dcgan.d_loss_semi], feed_dict={dcgan.labeled_inputs: labeled_image_batch,
+                                                                                                  dcgan.labels: get_gan_labels(labels),
+                                                                                                  dcgan.inputs: image_batch,
+                                                                                                  dcgan.z: batch_z,
+                                                                                                  dcgan.d_semi_learning_rate: learning_rate,
+                                                                                                  dcgan.adv_unlab: adv_unlabeled,
+                                                                                                  dcgan.adv_labeled: adv_labeled
+                                                                                                  })
+            else:
+                _, d_loss = session.run([optimizer_dict["semi_d"], dcgan.d_loss_semi], feed_dict={dcgan.labeled_inputs: labeled_image_batch,
+                                                                                                  dcgan.labels: get_gan_labels(labels),
+                                                                                                  dcgan.inputs: image_batch,
+                                                                                                  dcgan.z: batch_z,
+                                                                                                  dcgan.d_semi_learning_rate: learning_rate
+                                                                                                  })
 
             _, s_loss = session.run([optimizer_dict["sup_d"], dcgan.s_loss], feed_dict={dcgan.inputs: labeled_image_batch,
                                                                                         dcgan.lbls: labels})
