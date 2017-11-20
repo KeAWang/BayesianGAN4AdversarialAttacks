@@ -184,7 +184,8 @@ def b_dcgan(dataset, args):
     batch_size = args.batch_size
     dataset_size = dataset.dataset_size
     
-    saver = tf.train.Saver()
+    with tf.get_default_graph() as _:
+        saver = tf.train.Saver()
 
     session = get_session()
 
