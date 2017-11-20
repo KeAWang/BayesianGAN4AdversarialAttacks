@@ -195,23 +195,22 @@ def b_dcgan(dataset, args):
 	    tf.set_random_seed(args.random_seed)
     # due to how much the TF code sucks all functions take fixed batch_size at all times
     dcgan = BDCGAN(x_dim, z_dim, dataset_size, batch_size=batch_size, J=args.J, M=args.M, 
-                   lr=args.lr, optimizer=args.optimizer, gen_observed=args.gen_observed,
+                   lr=args.lr, optimizer=args.optimizer, gen_observed=args.gen_observed, adv_train=args.adv_train
                    num_classes=dataset.num_classes if args.semi_supervised else 1)
     if args.adv_test and args.semi_supervised:
         fgsm = FastGradientMethod(dcgan, sess=session)
         dcgan.adv_constructor = fgsm
         eval_params = {'batch_size': batch_size}
-        fgsm_params = {'eps': 0.3,
+        fgsm_params = {'eps': args.eps,
                    'clip_min': 0.,
                    'clip_max': 1.}
         adv_x = fgsm.generate(x,**fgsm_params)
         adv_test_x = fgsm.generate(test_x,**fgsm_params)
         preds = dcgan.get_probs(adv_x)
-    #elif args.adv_test:
     if args.adv_training:
         unlabeled_targets = np.zeros([batch_size,dcgan.K+1])
         unlabeled_targets[:,0] = 1
-        fgsm_targeted_params = {'eps': 0.3,
+        fgsm_targeted_params = {'eps': args.eps,
                    'clip_min': 0.,
                    'clip_max': 1.,
                     'y_target': unlabeled_targets
@@ -472,6 +471,12 @@ if __name__ == "__main__":
                         default=1,
                         help="number of MCMC NN weight samples per z")
 
+    parser.add_argument('--eps',
+                        type=int,
+                        dest="eps",
+                        default=.25,
+                        help="epsilon for FGSM")
+
     parser.add_argument('--N',
                         type=int,
                         default=128,
@@ -489,6 +494,10 @@ if __name__ == "__main__":
     parser.add_argument('--adv_test',
                         action="store_true",
                         help="do adv testing")
+
+    parser.add_argument('--adv_train',
+                        action="store_true",
+                        help="do adv training")
 
     parser.add_argument('--adv_training',
                         action="store_true",
