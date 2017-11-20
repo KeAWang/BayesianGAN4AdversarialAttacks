@@ -121,13 +121,14 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
+    len(not_fake)/len(all_test_lbls) = non_adv_acc
     print("Test images discriminator thinks are not fake:" + str(len(not_fake)))
     semi_sup_acc = (100. * np.sum(np.argmax(test_d_logits[not_fake], 1) == np.argmax(test_lbls[not_fake], 1) + 1))\
                    / len(not_fake)
     sup_acc = (100. * np.sum(np.argmax(test_s_logits, 1) == np.argmax(test_lbls, 1)))\
               / test_lbls.shape[0]
 
-    return sup_acc, semi_sup_acc
+    return sup_acc, semi_sup_acc, non_adv_acc
 
 def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
 
@@ -148,6 +149,7 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
     print("Adversarial images discriminator thinks are not fake:" + str(len(not_fake)))
+    adv_accuracy = len(not_fake)/len(all_test_lbls)
     semi_sup_acc = (100. * np.sum(np.argmax(test_d_logits[not_fake], 1) == np.argmax(test_lbls[not_fake], 1) + 1))\
                    / len(not_fake)
     semi_sup_acc_unfilter = (100. * np.sum(np.argmax(test_d_logits[:,1:], 1) == np.argmax(test_lbls, 1)))\
@@ -156,7 +158,7 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     correct_certainty = np.mean([i[0] for i,j in zip(test_d,test_lbls) if np.argmax(i[1:]) == np.argmax(j)])
     uncorrect_certainty = np.mean([i[0] for i,j in zip(test_d,test_lbls) if np.argmax(i[1:]) != np.argmax(j)])
 
-    return semi_sup_acc, semi_sup_acc_unfilter, correct_certainty, uncorrect_certainty
+    return semi_sup_acc, semi_sup_acc_unfilter, correct_certainty, uncorrect_certainty, adv_accuracy
 
 def get_certainty_for_adv(session, dcgan, all_test_img_batches,all_test_lbls):
 
@@ -183,8 +185,6 @@ def b_dcgan(dataset, args):
     x_dim = dataset.x_dim
     batch_size = args.batch_size
     dataset_size = dataset.dataset_size
-    
-    saver = tf.train.Saver()
 
     session = get_session()
 
@@ -211,7 +211,7 @@ def b_dcgan(dataset, args):
         adv_x = fgsm.generate(x,**fgsm_params)
         adv_test_x = fgsm.generate(test_x,**fgsm_params)
         preds = dcgan.get_probs(adv_x)
-    if args.adv_training:
+    if args.adv_train:
         unlabeled_targets = np.zeros([batch_size,dcgan.K+1])
         unlabeled_targets[:,0] = 1
         fgsm_targeted_params = {'eps': args.eps,
@@ -219,6 +219,8 @@ def b_dcgan(dataset, args):
                    'clip_max': 1.,
                     'y_target': unlabeled_targets
                    }
+
+    saver = tf.train.Saver()
 
     print("Starting session")
     session.run(tf.global_variables_initializer())
@@ -254,7 +256,7 @@ def b_dcgan(dataset, args):
     base_learning_rate = args.lr # for now we use same learning rate for Ds and Gs
     lr_decay_rate = args.lr_decay
 
-    for train_iter in range(prev_iters, num_train_iter):
+    for train_iter in range(1+prev_iters, 1+num_train_iter):
 
         if train_iter == 5000:
             print("Switching to user-specified optimizer")
@@ -277,20 +279,25 @@ def b_dcgan(dataset, args):
 
 
         if args.semi_supervised:
-
-
             labeled_image_batch, labels = next(supervised_batches)
-            adv_labeled = session.run(fgsm.generate(labeled_image_ph,**fgsm_targeted_params), feed_dict = {labeled_image_ph:labeled_image_batch})
-            adv_unlabeled = session.run(fgsm.generate(unlabeled_batch_ph,**fgsm_params),feed_dict = {unlabeled_batch_ph:image_batch})
-           
-            _, d_loss = session.run([optimizer_dict["semi_d"], dcgan.d_loss_semi], feed_dict={dcgan.labeled_inputs: labeled_image_batch,
-                                                                                              dcgan.labels: get_gan_labels(labels),
-                                                                                              dcgan.inputs: image_batch,
-                                                                                              dcgan.z: batch_z,
-                                                                                              dcgan.d_semi_learning_rate: learning_rate,
-                                                                                              dcgan.adv_unlab: adv_unlabeled,
-                                                                                              dcgan.adv_labeled: adv_labeled
-                                                                                              })
+            if args.adv_train:
+                adv_labeled = session.run(fgsm.generate(labeled_image_ph,**fgsm_targeted_params), feed_dict = {labeled_image_ph:labeled_image_batch})
+                adv_unlabeled = session.run(fgsm.generate(unlabeled_batch_ph,**fgsm_params),feed_dict = {unlabeled_batch_ph:image_batch})
+                _, d_loss = session.run([optimizer_dict["semi_d"], dcgan.d_loss_semi], feed_dict={dcgan.labeled_inputs: labeled_image_batch,
+                                                                                                  dcgan.labels: get_gan_labels(labels),
+                                                                                                  dcgan.inputs: image_batch,
+                                                                                                  dcgan.z: batch_z,
+                                                                                                  dcgan.d_semi_learning_rate: learning_rate,
+                                                                                                  dcgan.adv_unlab: adv_unlabeled,
+                                                                                                  dcgan.adv_labeled: adv_labeled
+                                                                                                  })
+            else:
+                _, d_loss = session.run([optimizer_dict["semi_d"], dcgan.d_loss_semi], feed_dict={dcgan.labeled_inputs: labeled_image_batch,
+                                                                                                  dcgan.labels: get_gan_labels(labels),
+                                                                                                  dcgan.inputs: image_batch,
+                                                                                                  dcgan.z: batch_z,
+                                                                                                  dcgan.d_semi_learning_rate: learning_rate
+                                                                                                  })
 
             _, s_loss = session.run([optimizer_dict["sup_d"], dcgan.s_loss], feed_dict={dcgan.inputs: labeled_image_batch,
                                                                                         dcgan.lbls: labels})
@@ -375,12 +382,12 @@ def b_dcgan(dataset, args):
             if args.semi_supervised:
                 # get test set performance on real labels only for both GAN-based classifier and standard one
 
-                s_acc, ss_acc = get_test_accuracy(session, dcgan, test_image_batches, test_label_batches)
+                s_acc, ss_acc, non_adv_acc = get_test_accuracy(session, dcgan, test_image_batches, test_label_batches)
                 if args.adv_test:
                     adv_set = []
                     for test_images in test_image_batches:
                         adv_set.append(session.run(adv_x, feed_dict = {x:test_images}))
-                    adv_sup_acc, adv_ss_acc,correct_uncertainty, incorrect_uncertainty = get_adv_test_accuracy(session,dcgan,adv_set,test_label_batches)
+                    adv_sup_acc, adv_ss_acc,correct_uncertainty, incorrect_uncertainty, adv_acc = get_adv_test_accuracy(session,dcgan,adv_set,test_label_batches)
                     print("Adversarial semi-sup accuracy with filter: %.2f" % adv_sup_acc)
                     print("Adverarial semi-sup accuracy: %.2f" % adv_ss_acc)
                     print("Uncertainty for correct predictions: %.2f" % correct_uncertainty)
@@ -393,6 +400,8 @@ def b_dcgan(dataset, args):
             results = {"disc_loss": float(d_loss),
                        "gen_losses": list(map(float, g_losses))}
             if args.semi_supervised:
+                results["non_adversarial_classification_accuracy"] = float(non_adv_acc)
+                results["adversarial_classification_accuracy"] = float(adv_acc)
                 results["adversarial_uncertainty_correct"] = float(correct_uncertainty)
                 results["adversarial_uncertainty_incorrect"] = float(incorrect_uncertainty)
                 results["supervised_acc"] = float(s_acc)
@@ -514,12 +523,8 @@ if __name__ == "__main__":
                         help="do adv testing")
 
     parser.add_argument('--adv_train',
-                        action="store_false",
-                        help="do adv training")
-
-    parser.add_argument('--adv_training',
                         action="store_true",
-                        help="adversarial training")
+                        help="do adv training")
 
     parser.add_argument('--wasserstein',
                         action="store_true",
@@ -544,7 +549,7 @@ if __name__ == "__main__":
                         help="number of iterations per checkpoint")
 
     parser.add_argument('--load_chkpt',
-                        action="store_false",
+                        action="store_true",
                         help="whether to load from a checkpoint")
 
     parser.add_argument('--chkpt',
