@@ -22,7 +22,7 @@ class BGAN(object):
 
     def __init__(self, x_dim, z_dim, dataset_size, batch_size=64, prior_std=1.0, J=1, M=1, 
                  num_classes=1, alpha=0.01, lr=0.0002, gen_observed=1000,
-                 optimizer='adam', wasserstein=False, ml=False):
+                 optimizer='adam', wasserstein=False, ml=False, adv_train = False):
 
         self.batch_size = batch_size
         self.dataset_size = dataset_size
@@ -30,7 +30,7 @@ class BGAN(object):
         self.x_dim = x_dim
         self.z_dim = z_dim
         self.optimizer = optimizer.lower()
-
+        self.adv_train = adv_train 
         self.wasserstein = wasserstein
         if self.wasserstein:
             assert num_classes == 1, "cannot do semi-sup learning with wasserstein ... yet"
@@ -99,21 +99,21 @@ class BGAN(object):
 
 
     def build_bgan_graph(self):
+        # self.eps = .25
+        self.lam = .3
+        # y = np.zeros([self.batch_size,self.K+1])
+        # y[:,0] = 1
+        # self.fgsm_params = {'eps': self.eps,
+        #            'clip_min': 0.,
+        #            'clip_max': 1.,
+        #            }
+        # if self.K > 1:
+        #     self.fgsm_unlab_params = {'eps': self.eps,
+        #            'clip_min': 0.,
+        #            'clip_max': 1.,
+        #            'y_target': y
+        #            }
 
-        y = np.zeros([self.batch_size,self.K+1])
-        y[:,0] = 1
-        self.fgsm_params = {'eps': 0.3,
-                   'clip_min': 0.,
-                   'clip_max': 1.,
-                   }
-        if self.K > 1:
-            self.fgsm_unlab_params = {'eps': 0.3,
-                   'clip_min': 0.,
-                   'clip_max': 1.,
-                   'y_target': y
-                   }
-
-        self.fgsm = FastGradientMethod(self)
 
         self.inputs = tf.placeholder(tf.float32,
                                      [self.batch_size] + self.x_dim, name='real_images')
@@ -155,8 +155,9 @@ class BGAN(object):
 
         self.D, self.D_logits = self.discriminator(self.inputs, self.K+1)
         self.Dsup, self.Dsup_logits = self.discriminator(self.labeled_inputs, self.K+1, reuse=True)
-        self.D_advlab, self.D_advlab_logits = self.discriminator(self.adv_labeled, self.K+1, reuse = True)
-        self.D_advunlab, self.D_advunlab_logits = self.discriminator(self.adv_unlab, self.K+1, reuse = True)
+        if self.adv_train:
+            self.D_advlab, self.D_advlab_logits = self.discriminator(self.adv_labeled, self.K+1, reuse = True)
+            self.D_advunlab, self.D_advunlab_logits = self.discriminator(self.adv_unlab, self.K+1, reuse = True)
 
         if self.K == 1:
             if self.wasserstein:
@@ -171,9 +172,10 @@ class BGAN(object):
             self.d_loss_sup = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.Dsup_logits,
                                                                                      labels=self.labels))    
             self.d_loss_real = -tf.reduce_mean(tf.log((1.0 - self.D[:, 0]) + 1e-8))
-            self.d_loss_advlab = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.D_advlab_logits,
-                                                                                     labels=self.labels))
-            self.d_loss_advunlab = -tf.reduce_mean(tf.log((1.0 - self.D_advunlab[:, 0]) + 1e-8))
+            if self.adv_train:
+                self.d_loss_advlab = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.D_advlab_logits,
+                                                                                         labels=self.labels))
+                self.d_loss_advunlab = -tf.reduce_mean(tf.log((1.0 - self.D_advunlab[:, 0]) + 1e-8))
                         
 
         self.generation = defaultdict(list)
@@ -201,11 +203,21 @@ class BGAN(object):
         t_vars = tf.trainable_variables()
         self.d_vars = [var for var in t_vars if 'd_' in var.name]
 
-        self.d_loss = self.d_loss_real + self.d_loss_fake
+        self.d_loss = (self.d_loss_real + self.d_loss_fake + self.lam*(self.d_loss_advlab + self.d_loss_advunlab))\
+                        /(self.batch_size*2+self.lam*2*self.batch_size)
         if not self.ml:
             self.d_loss += self.disc_prior() + self.disc_noise()
         if self.K > 1:
-            self.d_loss_semi = self.d_loss_sup + self.d_loss_real + self.d_loss_fake
+            num_fake = self.num_gen*self.num_mcmc
+            num_sup = batch_size
+            num_unsup = batch_size
+            num_adv = num_sup+num_unsup
+            if self.adv_train:
+                self.d_loss_semi = (self.d_loss_sup + self.d_loss_real + self.d_loss_fake + self.lam*(self.d_loss_advlab + self.d_loss_advunlab))\
+                                    /(num_sup+num_unsup+num_fake+self.lam*num_adv)
+            else: 
+                self.d_loss_semi = self.d_loss_sup + self.d_loss_real + self.d_loss_fake
+                
             if not self.ml:
                 self.d_loss_semi += self.disc_prior() + self.disc_noise()
 
