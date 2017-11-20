@@ -18,7 +18,7 @@ from bgan_util import AttributeDict
 from bgan_util import print_images, MnistDataset, CelebDataset, Cifar10, SVHN, ImageNet
 from bgan_models import BDCGAN
 import sys
-sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
+sys.path.insert(0, '/home/alex/cleverhans')
 from cleverhans.attacks import FastGradientMethod
 from cleverhans.utils_tf import model_train, model_eval,model_loss
 from cleverhans.model import Model
@@ -183,8 +183,12 @@ def b_dcgan(dataset, args):
     x_dim = dataset.x_dim
     batch_size = args.batch_size
     dataset_size = dataset.dataset_size
+    
+    with tf.get_default_graph() as _:
+        saver = tf.train.Saver()
 
     session = get_session()
+
     test_x = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
     x = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
     y = tf.placeholder(tf.float32, shape=(batch_size, 10))
@@ -195,7 +199,8 @@ def b_dcgan(dataset, args):
 	    tf.set_random_seed(args.random_seed)
     # due to how much the TF code sucks all functions take fixed batch_size at all times
     dcgan = BDCGAN(x_dim, z_dim, dataset_size, batch_size=batch_size, J=args.J, M=args.M, 
-                   lr=args.lr, optimizer=args.optimizer, gen_observed=args.gen_observed, adv_train=args.adv_train
+                   lr=args.lr, optimizer=args.optimizer,
+                   gen_observed=args.gen_observed, adv_train=args.adv_train,
                    num_classes=dataset.num_classes if args.semi_supervised else 1)
     if args.adv_test and args.semi_supervised:
         fgsm = FastGradientMethod(dcgan, sess=session)
@@ -219,8 +224,14 @@ def b_dcgan(dataset, args):
     print("Starting session")
     session.run(tf.global_variables_initializer())
 
+    prev_iters = 0
+    if args.load_chkpt:
+        saver.restore(session, args.chkpt)
+        # Assume checkpoint is of the form "model_300"
+        prev_iters = int(args.chkpt.split('/')[-1].split('_')[1])
+        print("Model restored from iteration:", prev_iters)
+
     print("Starting training loop")
-        
     num_train_iter = args.train_iter
 
     if hasattr(dataset, "supervised_batches"):
@@ -244,7 +255,7 @@ def b_dcgan(dataset, args):
     base_learning_rate = args.lr # for now we use same learning rate for Ds and Gs
     lr_decay_rate = args.lr_decay
 
-    for train_iter in range(num_train_iter):
+    for train_iter in range(prev_iters, num_train_iter):
 
         if train_iter == 5000:
             print("Switching to user-specified optimizer")
@@ -390,6 +401,7 @@ def b_dcgan(dataset, args):
                 results["adversarial_unfilted_semi_supervised_acc"] = float(adv_ss_acc)
                 results["semi_supervised_acc"] = float(ss_acc)
                 results["timestamp"] = time.time()
+                results["previous_chkpt"] = args.chkpt
 
             with open(os.path.join(args.out_dir, 'results_%i.json' % train_iter), 'w') as fp:
                 json.dump(results, fp)
@@ -411,8 +423,15 @@ def b_dcgan(dataset, args):
                                     **var_dict)
             
 
-            print("done")
-        
+            print("Done saving weights")
+
+        if train_iter > 0 and train_iter%args.save_chkpt == 0:
+            save_path = saver.save(session, os.path.join(args.out_dir,
+                                                         "model_%i" % train_iter))
+            print("Model checkpointed in file: %s" % save_path)
+            
+ 
+    session.close()    
 
 
 if __name__ == "__main__":
@@ -496,7 +515,7 @@ if __name__ == "__main__":
                         help="do adv testing")
 
     parser.add_argument('--adv_train',
-                        action="store_true",
+                        action="store_false",
                         help="do adv training")
 
     parser.add_argument('--adv_training',
@@ -514,17 +533,31 @@ if __name__ == "__main__":
 
     parser.add_argument('--save_samples',
                         action="store_true",
-                        help="wether to save generated samples")
-    
+                        help="whether to save generated samples")
+
     parser.add_argument('--save_weights',
                         action="store_true",
-                        help="wether to save weights")
+                        help="whether to save weights")
+
+    parser.add_argument('--save_chkpt',
+                        type=int,
+                        default=200,
+                        help="number of iterations per checkpoint")
+
+    parser.add_argument('--load_chkpt',
+                        action="store_false",
+                        help="whether to load from a checkpoint")
+
+    parser.add_argument('--chkpt',
+                        type=str,
+                        default='',
+                        help="name of checkpoint to load")
 
     parser.add_argument('--random_seed',
                         type=int,
                         default=None,
                         help="random seed")
-    
+
     parser.add_argument('--lr',
                         type=float,
                         default=0.005,
