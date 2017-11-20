@@ -496,7 +496,7 @@ if __name__ == "__main__":
                         help="do adv testing")
 
     parser.add_argument('--adv_train',
-                        action="store_true",
+                        action="store_false",
                         help="do adv training")
 
     parser.add_argument('--adv_training',
