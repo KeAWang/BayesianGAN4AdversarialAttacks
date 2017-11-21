@@ -8,7 +8,11 @@ from bgan_util import AttributeDict
 
 #### Bayesian DCGAN
 import sys
+<<<<<<< HEAD
+sys.path.insert(0, '/home/ubuntu/cleverhans')
+=======
 sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
+>>>>>>> 700db252c2c75b13bc24e632f58b97efeee028f5
 from cleverhans.attacks import FastGradientMethod
 from cleverhans.utils_tf import model_train, model_eval, model_loss
 from cleverhans.model import Model
