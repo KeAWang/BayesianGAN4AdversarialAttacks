@@ -19,7 +19,7 @@ from bgan_util import print_images, MnistDataset, CelebDataset, Cifar10, SVHN, I
 from bgan_models import BDCGAN
 import sys
 
-sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
+sys.path.insert(0, '/home/alex/cleverhans')
 
 from cleverhans.attacks import FastGradientMethod
 from cleverhans.utils_tf import model_train, model_eval,model_loss
@@ -123,7 +123,7 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
-    len(not_fake)/len(all_test_lbls) = non_adv_acc
+    non_adv_acc = len(not_fake)/len(all_test_lbls)
     print("Test images discriminator thinks are not fake:" + str(len(not_fake)))
     semi_sup_acc = (100. * np.sum(np.argmax(test_d_logits[not_fake], 1) == np.argmax(test_lbls[not_fake], 1) + 1))\
                    / len(not_fake)
@@ -394,6 +394,9 @@ def b_dcgan(dataset, args):
                     print("Adverarial semi-sup accuracy: %.2f" % adv_ss_acc)
                     print("Uncertainty for correct predictions: %.2f" % correct_uncertainty)
                     print("Uncertainty for incorrect predictions: %.2f" % incorrect_uncertainty)
+                    print("non_adversarial_classification_accuracy: %.2f" % non_adv_acc)
+                    print("adversarial_classification_accuracy: %.2f" % adv_acc)
+
                 print("Supervised acc: %.2f" % (s_acc))
                 print("Semi-sup acc: %.2f" % (ss_acc))
 
