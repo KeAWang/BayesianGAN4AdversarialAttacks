@@ -605,7 +605,8 @@ if __name__ == "__main__":
     else:
         args.out_dir = os.path.join(args.out_dir, "bgan_%s_%s" % (args.dataset, str(datetime.now())))
 
-    os.makedirs(args.out_dir)
+    if not os.path.exists(args.out_dir):
+        os.makedirs(args.out_dir)
 
     import pprint
     with open(os.path.join(args.out_dir, "hypers.txt"), "w") as hf:
