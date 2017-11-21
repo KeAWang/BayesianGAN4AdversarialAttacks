@@ -18,7 +18,7 @@ from bgan_util import AttributeDict
 from bgan_util import print_images, MnistDataset, CelebDataset, Cifar10, SVHN, ImageNet
 from bgan_models import BDCGAN
 import sys
-sys.path.insert(0, '/home/alex/cleverhans')
+sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
 from cleverhans.attacks import FastGradientMethod
 from cleverhans.utils_tf import model_train, model_eval,model_loss
 from cleverhans.model import Model
