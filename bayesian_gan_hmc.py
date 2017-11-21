@@ -5,6 +5,7 @@ import sys
 import argparse
 import json
 import time
+import datetime
 
 import numpy as np
 from math import ceil
@@ -19,7 +20,8 @@ from bgan_util import print_images, MnistDataset, CelebDataset, Cifar10, SVHN, I
 from bgan_models import BDCGAN
 import sys
 
-sys.path.insert(0, '/home/ubuntu/cleverhans')
+#sys.path.insert(0, '/home/ubuntu/cleverhans')
+sys.path.insert(0, '/home/alex/cleverhans')
 
 from cleverhans.attacks import FastGradientMethod
 from cleverhans.utils_tf import model_train, model_eval,model_loss
@@ -562,6 +564,11 @@ if __name__ == "__main__":
                         default='',
                         help="name of checkpoint to load")
 
+    parser.add_argument('--custom_experiment',
+                        type=str,
+                        default='',
+                        help="custom name of experiment")
+
     parser.add_argument('--random_seed',
                         type=int,
                         default=None,
@@ -593,7 +600,11 @@ if __name__ == "__main__":
     if not os.path.exists(args.out_dir):
         print("Creating %s" % args.out_dir)
         os.makedirs(args.out_dir)
-    args.out_dir = os.path.join(args.out_dir, "bgan_%s_%i" % (args.dataset, int(time.time())))
+    if args.custom_experiment != '':
+        args.out_dir = os.path.join(args.out_dir, args.custom_experiment)
+    else:
+        args.out_dir = os.path.join(args.out_dir, "bgan_%s_%s" % (args.dataset, str(datetime.now())))
+
     os.makedirs(args.out_dir)
 
     import pprint
