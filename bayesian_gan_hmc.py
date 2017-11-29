@@ -112,19 +112,21 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
 
     # only need this function because bdcgan has a fixed batch size for *everything*
     # test_size is in number of batches
-    all_d_logits, all_s_logits = [], []
+    all_d_logits, all_s_logits, all_d = [], [], []
     for test_image_batch, test_lbls in zip(all_test_img_batches, all_test_lbls):
         test_d_logits, test_s_logits, test_d = session.run([dcgan.test_D_logits, dcgan.test_S_logits, dcgan.test_D],
                                                    feed_dict={dcgan.test_inputs: test_image_batch})
         all_d_logits.append(test_d_logits)
         all_s_logits.append(test_s_logits)
+        add_d.append(test_d)
 
     test_d_logits = np.concatenate(all_d_logits)
     test_s_logits = np.concatenate(all_s_logits)
     test_lbls = np.concatenate(all_test_lbls)
+    test_d = np.concatenate(all_d)
 
     #not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
-    not_fake = [i for i,test_d in enumerate(test_d) if test_d[0] < .5]
+    not_fake = [i for i,x in enumerate(test_d) if x[0] < .5]
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
     non_adv_acc = len(not_fake)/len(test_lbls)
@@ -148,11 +150,12 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
 
         all_d_logits.append(test_d_logits)
         all_d.append(test_d)
-    test_d = np.concatenate(all_d)
+
     test_d_logits = np.concatenate(all_d_logits)
     test_lbls = np.concatenate(all_test_lbls)
+    test_d = np.concatenate(all_d)
 
-    not_fake = [i for i,test_d in enumerate(test_d) if test_d[0] < .5]
+    not_fake = [i for i,x in enumerate(test_d) if x[0] < .5]
     #not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
