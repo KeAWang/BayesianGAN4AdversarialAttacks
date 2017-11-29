@@ -118,7 +118,7 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
                                                    feed_dict={dcgan.test_inputs: test_image_batch})
         all_d_logits.append(test_d_logits)
         all_s_logits.append(test_s_logits)
-        add_d.append(test_d)
+        all_d.append(test_d)
 
     test_d_logits = np.concatenate(all_d_logits)
     test_s_logits = np.concatenate(all_s_logits)
