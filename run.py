@@ -5,7 +5,7 @@ import os
 epoch_size = 200
 num_epochs = 20
 start_epoch = 6
-experiment_name = "adv_train_only"
+experiment_name = "adv_test_only"
 
 x = "python bayesian_gan_hmc.py --out_dir \'results\' --semi_supervised --save_weights --save_samples --adv_test --data_path \'\' --n_save 100 --num_mcmc 2  --numz 10 --custom_experiment "+experiment_name+" --save_chkpt "+str(epoch_size)
 
