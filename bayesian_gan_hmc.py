@@ -20,9 +20,8 @@ from bgan_util import print_images, MnistDataset, CelebDataset, Cifar10, SVHN, I
 from bgan_models import BDCGAN
 import sys
 
-#sys.path.insert(0, '/home/ubuntu/cleverhans')
-
-sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
+sys.path.insert(0, '/home/ubuntu/cleverhans')
+#sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
 #sys.path.insert(0, '/home/alex/cleverhans')
 
 from cleverhans.attacks import FastGradientMethod
