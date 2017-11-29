@@ -5,7 +5,7 @@ import sys
 import argparse
 import json
 import time
-import datetime
+from datetime import datetime
 
 import numpy as np
 from math import ceil
@@ -20,7 +20,9 @@ from bgan_util import print_images, MnistDataset, CelebDataset, Cifar10, SVHN, I
 from bgan_models import BDCGAN
 import sys
 
-sys.path.insert(0, '/home/ubuntu/cleverhans')
+#sys.path.insert(0, '/home/ubuntu/cleverhans')
+
+sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
 #sys.path.insert(0, '/home/alex/cleverhans')
 
 from cleverhans.attacks import FastGradientMethod
@@ -113,7 +115,7 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     # test_size is in number of batches
     all_d_logits, all_s_logits = [], []
     for test_image_batch, test_lbls in zip(all_test_img_batches, all_test_lbls):
-        test_d_logits, test_s_logits = session.run([dcgan.test_D_logits, dcgan.test_S_logits],
+        test_d_logits, test_s_logits, test_d = session.run([dcgan.test_D_logits, dcgan.test_S_logits, dcgan.test_D],
                                                    feed_dict={dcgan.test_inputs: test_image_batch})
         all_d_logits.append(test_d_logits)
         all_s_logits.append(test_s_logits)
@@ -122,7 +124,8 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     test_s_logits = np.concatenate(all_s_logits)
     test_lbls = np.concatenate(all_test_lbls)
 
-    not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
+    #not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
+    not_fake = [i for i,test_d in enumerate(test_d) if test_d[0] < .5]
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
     non_adv_acc = len(not_fake)/len(test_lbls)
@@ -132,7 +135,8 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     sup_acc = (100. * np.sum(np.argmax(test_s_logits, 1) == np.argmax(test_lbls, 1)))\
               / test_lbls.shape[0]
 
-    return sup_acc, semi_sup_acc, non_adv_acc
+    ex_prob = test_d[0]
+    return sup_acc, semi_sup_acc, non_adv_acc, ex_prob
 
 def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
 
@@ -140,16 +144,17 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     # test_size is in number of batches
     all_d_logits, all_s_logits, all_d = [], [], []
     for test_image_batch, test_lbls in zip(all_test_img_batches, all_test_lbls):
-        test_d_logits, test_d = session.run([dcgan.test_D_logits,dcgan.test_D],
+        test_d_logits, test_d = session.run([dcgan.test_D_logits, dcgan.test_D],
                                                    feed_dict={dcgan.test_inputs: test_image_batch})
+
         all_d_logits.append(test_d_logits)
         all_d.append(test_d)
     test_d = np.concatenate(all_d)
     test_d_logits = np.concatenate(all_d_logits)
     test_lbls = np.concatenate(all_test_lbls)
 
-
-    not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
+    not_fake = [i for i,test_d in enumerate(test_d) if test_d[0] < .5]
+    #not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
     print("Adversarial images discriminator thinks are not fake:" + str(len(not_fake)))
@@ -162,7 +167,8 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     correct_certainty = np.mean([i[0] for i,j in zip(test_d,test_lbls) if np.argmax(i[1:]) == np.argmax(j)])
     uncorrect_certainty = np.mean([i[0] for i,j in zip(test_d,test_lbls) if np.argmax(i[1:]) != np.argmax(j)])
 
-    return semi_sup_acc, semi_sup_acc_unfilter, correct_certainty, uncorrect_certainty, adv_accuracy
+    adv_ex_prob = test_d[0]
+    return semi_sup_acc, semi_sup_acc_unfilter, correct_certainty, uncorrect_certainty, adv_accuracy, adv_ex_prob
 
 def get_certainty_for_adv(session, dcgan, all_test_img_batches,all_test_lbls):
 
@@ -386,12 +392,12 @@ def b_dcgan(dataset, args):
             if args.semi_supervised:
                 # get test set performance on real labels only for both GAN-based classifier and standard one
 
-                s_acc, ss_acc, non_adv_acc = get_test_accuracy(session, dcgan, test_image_batches, test_label_batches)
+                s_acc, ss_acc, non_adv_acc, ex_prob = get_test_accuracy(session, dcgan, test_image_batches, test_label_batches)
                 if args.adv_test:
                     adv_set = []
                     for test_images in test_image_batches:
                         adv_set.append(session.run(adv_x, feed_dict = {x:test_images}))
-                    adv_sup_acc, adv_ss_acc,correct_uncertainty, incorrect_uncertainty, adv_acc = get_adv_test_accuracy(session,dcgan,adv_set,test_label_batches)
+                    adv_sup_acc, adv_ss_acc,correct_uncertainty, incorrect_uncertainty, adv_acc, adv_ex_prob = get_adv_test_accuracy(session,dcgan,adv_set,test_label_batches)
                     print("Adversarial semi-sup accuracy with filter: %.2f" % adv_sup_acc)
                     print("Adverarial semi-sup accuracy: %.2f" % adv_ss_acc)
                     print("Uncertainty for correct predictions: %.2f" % correct_uncertainty)
@@ -407,6 +413,8 @@ def b_dcgan(dataset, args):
             results = {"disc_loss": float(d_loss),
                        "gen_losses": list(map(float, g_losses))}
             if args.semi_supervised:
+                #results["example_non_adversarial_probs"] = list(ex_prob.flatten())
+                #results["example_adversarial_probs"] = list(adv_ex_prob.flatten())
                 results["non_adversarial_classification_accuracy"] = float(non_adv_acc)
                 results["adversarial_classification_accuracy"] = float(adv_acc)
                 results["adversarial_uncertainty_correct"] = float(correct_uncertainty)
