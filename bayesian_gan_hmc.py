@@ -649,7 +649,6 @@ if __name__ == "__main__":
         from ml_dcgan import ml_dcgan
         root = args.out_dir
         for ens in range(args.ml_ensemble):
-            dataset = SVHN(svhn_path, subsample=0.8)
             args.out_dir = os.path.join(root, "%i" % ens)
             os.makedirs(args.out_dir)
             ml_dcgan(dataset, args)
