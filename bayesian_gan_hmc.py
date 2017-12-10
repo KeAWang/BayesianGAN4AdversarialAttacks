@@ -126,7 +126,8 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     test_d = np.concatenate(all_d)
 
     #not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
-    not_fake = [i for i,x in enumerate(test_d) if x[0] < .5]
+    #not_fake = [i for i,x in enumerate(test_d) if x[0] < .5]
+    not_fake = np.where(test_d[:,0] < 0.5)
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
     non_adv_acc = len(not_fake)/len(test_lbls)
@@ -155,7 +156,8 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     test_lbls = np.concatenate(all_test_lbls)
     test_d = np.concatenate(all_d)
 
-    not_fake = [i for i,x in enumerate(test_d) if x[0] < .5]
+    #not_fake = [i for i,x in enumerate(test_d) if x[0] < .5]
+    not_fake = np.where(test_d[:,0] < 0.5)
     #not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
@@ -650,7 +652,8 @@ if __name__ == "__main__":
         root = args.out_dir
         for ens in range(args.ml_ensemble):
             args.out_dir = os.path.join(root, "%i" % ens)
-            os.makedirs(args.out_dir)
+            if not os.path.exists(args.out_dir):
+                os.makedirs(args.out_dir)
             ml_dcgan(dataset, args)
     else:
         b_dcgan(dataset, args)
