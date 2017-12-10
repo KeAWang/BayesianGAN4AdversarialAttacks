@@ -20,11 +20,11 @@ from bgan_util import print_images, MnistDataset, CelebDataset, Cifar10, SVHN, I
 from bgan_models import BDCGAN
 import sys
 
-sys.path.insert(0, '/home/ubuntu/cleverhans')
-#sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
+#sys.path.insert(0, '/home/ubuntu/cleverhans')
+sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
 #sys.path.insert(0, '/home/alex/cleverhans')
 
-from cleverhans.attacks import FastGradientMethod
+from cleverhans.attacks import FastGradientMethod, SaliencyMapMethod
 from cleverhans.utils_tf import model_train, model_eval,model_loss
 from cleverhans.model import Model
 
@@ -214,7 +214,16 @@ def b_dcgan(dataset, args):
                    gen_observed=args.gen_observed, adv_train=args.adv_train,
                    num_classes=dataset.num_classes if args.semi_supervised else 1)
     if args.adv_test and args.semi_supervised:
-        fgsm = FastGradientMethod(dcgan, sess=session)
+        if args.jacobi == True:
+            fgsm = SaliencyMapMethod(dcgan, sess=session)
+            fgsm_params = {'theta': 1., 'gamma': 0.1,
+                   'clip_min': 0., 'clip_max': 1.}
+                   #,'y_target': None}
+        else:
+            fgsm = FastGradientMethod(dcgan, sess=session)
+            fgsm_params = {'eps': args.eps,
+                   'clip_min': 0.,
+                   'clip_max': 1.}
         dcgan.adv_constructor = fgsm
         eval_params = {'batch_size': batch_size}
         fgsm_params = {'eps': args.eps,
@@ -222,7 +231,8 @@ def b_dcgan(dataset, args):
                    'clip_max': 1.}
         adv_x = fgsm.generate(x,**fgsm_params)
         adv_test_x = fgsm.generate(test_x,**fgsm_params)
-        preds = dcgan.get_probs(adv_x)
+        print('passed')
+        #preds = dcgan.get_probs(adv_x)
     if args.adv_train:
         unlabeled_targets = np.zeros([batch_size,dcgan.K+1])
         unlabeled_targets[:,0] = 1
@@ -542,6 +552,10 @@ if __name__ == "__main__":
     parser.add_argument('--adv_train',
                         action="store_true",
                         help="do adv training")
+
+    parser.add_argument('--jacobi',
+                        action="store_true",
+                        help="use jacobi saliency method")
 
     parser.add_argument('--wasserstein',
                         action="store_true",
