@@ -24,7 +24,7 @@ import sys
 sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
 #sys.path.insert(0, '/home/alex/cleverhans')
 
-from cleverhans.attacks import FastGradientMethod, SaliencyMapMethod
+from cleverhans.attacks import FastGradientMethod, SaliencyMapMethod, BasicIterativeMethod
 from cleverhans.utils_tf import model_train, model_eval,model_loss
 from cleverhans.model import Model
 
@@ -124,7 +124,7 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     test_s_logits = np.concatenate(all_s_logits)
     test_lbls = np.concatenate(all_test_lbls)
     test_d = np.concatenate(all_d)
-
+    not_fake = np.where(test_d[:,0] < 0.45)[0]
     #not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     not_fake = [i for i,x in enumerate(test_d) if x[0] < .45]
     if len(not_fake) < 10:
@@ -154,8 +154,8 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     test_d_logits = np.concatenate(all_d_logits)
     test_lbls = np.concatenate(all_test_lbls)
     test_d = np.concatenate(all_d)
-
-    not_fake = [i for i,x in enumerate(test_d) if x[0] < .45]
+    not_fake = np.where(test_d[:,0] < 0.45)[0]
+    #not_fake = [i for i,x in enumerate(test_d) if x[0] < .45]
     #not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
@@ -215,9 +215,13 @@ def b_dcgan(dataset, args):
                    num_classes=dataset.num_classes if args.semi_supervised else 1)
     if args.adv_test and args.semi_supervised:
         if args.jacobi == True:
-            fgsm = SaliencyMapMethod(dcgan, sess=session)
-            fgsm_params = {'theta': 1., 'gamma': 0.1,
-                   'clip_min': 0., 'clip_max': 1.}
+            fgsm = BasicIterativeMethod(dcgan, sess=session)
+            fgsm_params = {'eps': args.eps,
+                    'eps_iter': float(args.eps/4),
+                    'nb_iter': 4
+                    'ord': np.inf,
+                   'clip_min': 0.,
+                   'clip_max': 1.}
                    #,'y_target': None}
         else:
             fgsm = FastGradientMethod(dcgan, sess=session)
@@ -528,7 +532,7 @@ if __name__ == "__main__":
     parser.add_argument('--eps',
                         type=int,
                         dest="eps",
-                        default=.25,
+                        default= .3,
                         help="epsilon for FGSM")
 
     parser.add_argument('--N',
