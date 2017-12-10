@@ -9,6 +9,7 @@ from datetime import datetime
 
 import numpy as np
 from math import ceil
+from scipy.misc import imsave
 
 from PIL import Image
 
@@ -124,10 +125,10 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     test_s_logits = np.concatenate(all_s_logits)
     test_lbls = np.concatenate(all_test_lbls)
     test_d = np.concatenate(all_d)
-
+    
     #not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
-    #not_fake = [i for i,x in enumerate(test_d) if x[0] < .5]
-    not_fake = np.where(test_d[:,0] < 0.5)
+    #not_fake = [i for i,x in enumerate(test_d) if x[0] < .5] #remove filter
+    not_fake = np.where(test_d[:,0] < 0.5)[0] #remove filter
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
     non_adv_acc = len(not_fake)/len(test_lbls)
@@ -156,8 +157,8 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     test_lbls = np.concatenate(all_test_lbls)
     test_d = np.concatenate(all_d)
 
-    #not_fake = [i for i,x in enumerate(test_d) if x[0] < .5]
-    not_fake = np.where(test_d[:,0] < 0.5)
+    #not_fake = [i for i,x in enumerate(test_d) if x[0] < .5] #remove filter
+    not_fake = np.where(test_d[:,0] < 0.5)[0] #remove filter
     #not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
@@ -408,6 +409,19 @@ def b_dcgan(dataset, args):
                     print("Uncertainty for incorrect predictions: %.2f" % incorrect_uncertainty)
                     print("non_adversarial_classification_accuracy: %.2f" % non_adv_acc)
                     print("adversarial_classification_accuracy: %.2f" % adv_acc)
+                    """
+                    if args.save_samples:
+                        print("saving adversarial test images and test images")
+                        i = 0
+
+                        for x,y in zip(adv_set[-1], test_image_batches[-1]):
+                            np.save(args.out_dir+'/adv_test'+str(train_iter)+'_'+str(i), x)
+                            np.save(args.out_dir+'/test'+str(train_iter)+'_'+str(i), y)
+                            i = i+1
+                            if i==5: #save 5 adversarial images 
+                                break
+                    """
+
 
                 print("Supervised acc: %.2f" % (s_acc))
                 print("Semi-sup acc: %.2f" % (ss_acc))
@@ -439,6 +453,7 @@ def b_dcgan(dataset, args):
                                  train_iter, directory=args.out_dir)
 
                 print_images(image_batch, "RAW", train_iter, directory=args.out_dir)
+
 
             if args.save_weights:
                 var_dict = {}
