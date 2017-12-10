@@ -8,8 +8,8 @@ from bgan_util import AttributeDict
 
 #### Bayesian DCGAN
 import sys
-sys.path.insert(0, '/home/ubuntu/cleverhans')
-#sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
+#sys.path.insert(0, '/home/ubuntu/cleverhans')
+sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
 #sys.path.insert(0, '/home/alex/cleverhans')
 from cleverhans.attacks import FastGradientMethod
 from cleverhans.utils_tf import model_train, model_eval, model_loss
@@ -172,8 +172,10 @@ class BGAN(object):
                                                                                           labels=tf.constant(constant_labels)))
         else:
             self.d_loss_sup = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.Dsup_logits,
-                                                                                     labels=self.labels))    
-            self.d_loss_real = -tf.reduce_mean(tf.log((1.0 - self.D[:, 0]) + 1e-8))
+                                                                                     labels=self.labels)) 
+            squash_value = 1
+
+            self.d_loss_real = -tf.reduce_mean(tf.log((1 - self.D[:, 0]) + 1e-8))
             if self.adv_train:
                 self.d_loss_advlab = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.D_advlab_logits,
                                                                                          labels=self.labels))
@@ -198,7 +200,8 @@ class BGAN(object):
             self.d_loss_fake = -tf.reduce_mean(all_d_logits)
         else:
             constant_labels = np.zeros((self.batch_size*self.num_gen*self.num_mcmc, self.K+1))
-            constant_labels[:, 0] = 1.0 # class label indicating it came from generator, aka fake
+            anti_squash_value = .95
+            constant_labels[:, 0] = anti_squash_value # class label indicating it came from generator, aka fake
             self.d_loss_fake = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=all_d_logits,
                                                                                       labels=tf.constant(constant_labels)))
 
