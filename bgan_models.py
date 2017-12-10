@@ -200,7 +200,7 @@ class BGAN(object):
             self.d_loss_fake = -tf.reduce_mean(all_d_logits)
         else:
             constant_labels = np.zeros((self.batch_size*self.num_gen*self.num_mcmc, self.K+1))
-            anti_squash_value = .95
+            anti_squash_value = .9
             constant_labels[:, 0] = anti_squash_value # class label indicating it came from generator, aka fake
             self.d_loss_fake = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=all_d_logits,
                                                                                       labels=tf.constant(constant_labels)))
