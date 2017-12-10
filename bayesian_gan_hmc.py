@@ -23,7 +23,7 @@ import sys
 #sys.path.insert(0, '/home/ubuntu/cleverhans')
 sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
 #sys.path.insert(0, '/home/alex/cleverhans')
-
+from scipy.misc import imsave
 from cleverhans.attacks import FastGradientMethod, SaliencyMapMethod, BasicIterativeMethod
 from cleverhans.utils_tf import model_train, model_eval,model_loss
 from cleverhans.model import Model
@@ -214,11 +214,11 @@ def b_dcgan(dataset, args):
                    gen_observed=args.gen_observed, adv_train=args.adv_train,
                    num_classes=dataset.num_classes if args.semi_supervised else 1)
     if args.adv_test and args.semi_supervised:
-        if args.jacobi == True:
+        if args.jacobi == False:
             fgsm = BasicIterativeMethod(dcgan, sess=session)
             fgsm_params = {'eps': args.eps,
                     'eps_iter': float(args.eps/4),
-                    'nb_iter': 4
+                    'nb_iter': 4,
                     'ord': np.inf,
                    'clip_min': 0.,
                    'clip_max': 1.}
@@ -449,7 +449,11 @@ def b_dcgan(dataset, args):
                 for gi in range(dcgan.num_gen):
                     print_images(all_sampled_imgs[gi], "B_DCGAN_%i_%.2f" % (gi, g_losses[gi*dcgan.num_mcmc]),
                                  train_iter, directory=args.out_dir)
-
+                #if args.adv_test:
+                    #for i in range(24):
+                        #imsave('test_image' + str(train_iter) + str(i), test_image_batches[0][i])
+                        #imsave('adversarial_images' + str(train_iter) + str(i), adv_set[i])
+                    #print_images(adv_set[:20], "adversarial", train_iter, directory = args.out_dir)
                 print_images(image_batch, "RAW", train_iter, directory=args.out_dir)
 
             if args.save_weights:
@@ -532,7 +536,7 @@ if __name__ == "__main__":
     parser.add_argument('--eps',
                         type=int,
                         dest="eps",
-                        default= .3,
+                        default= .25,
                         help="epsilon for FGSM")
 
     parser.add_argument('--N',
