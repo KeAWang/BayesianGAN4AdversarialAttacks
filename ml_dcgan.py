@@ -15,7 +15,7 @@ from bgan_models import BDCGAN
 from bayesian_gan_hmc import *
 
 sys.path.insert(0, '/home/ubuntu/cleverhans')
-from cleverhans.attacks import FastGradientMethod
+from cleverhans.attacks import FastGradientMethod, BasicIterativeMethod
 from cleverhans.utils_tf import model_train, model_eval,model_loss
 from cleverhans.model import Model
 
@@ -68,14 +68,25 @@ def ml_dcgan(dataset, args):
     supervised_batches = get_supervised_batches(dataset, args.N, batch_size, list(range(dataset.num_classes)))
 
     if args.adv_test:
-	
         x = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1)) # Hardcoded for MNIST
-        fgsm = FastGradientMethod(dcgan, sess=session)
-        dcgan.adv_constructor = fgsm
-        eval_params = {'batch_size': batch_size}
-        fgsm_params = {'eps': args.eps,
+        if args.basic_iterative:
+            fgsm = BasicIterativeMethod(dcgan, sess=session)
+            dcgan.adv_constructor = fgsm
+            fgsm_params = {'eps': args.eps,
+                    'eps_iter': float(args.eps/4),
+                    'nb_iter': 4,
+                    'ord': np.inf,
                    'clip_min': 0.,
                    'clip_max': 1.}
+                   #,'y_target': None} 
+        else:
+            fgsm = FastGradientMethod(dcgan, sess=session)
+            dcgan.adv_constructor = fgsm
+            eval_params = {'batch_size': batch_size}
+            fgsm_params = {'eps': args.eps,
+                       'clip_min': 0.,
+                       'clip_max': 1.}
+
         adv_x = fgsm.generate(x,**fgsm_params)
         preds = dcgan.get_probs(adv_x)
 
