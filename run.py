@@ -79,14 +79,14 @@ for epoch in range(start_epoch,num_epochs+1):
                  +" && "
                  +"rm ~/ORIE6741_bayesgan/results/"+experiment_name+"/model_"+penultimate_iter+".*")
 """
-
+"""
 experiment_name = "MLE_DCGAN_basic_iterative"
 num_iters = 2000
 x = "python bayesian_gan_hmc.py --out_dir \'results\' --semi_supervised --save_samples --ml_ensemble 1 --dataset mnist --adv_test --basic_iterative --data_path \'\' --n_save 100  --numz 10 --custom_experiment "+experiment_name 
 os.system(x+" --train_iter "+str(num_iters))
-
-
 """
+
+
 epoch_size = 400
 num_epochs = 5 
 start_epoch = 1
@@ -106,4 +106,4 @@ for epoch in range(start_epoch,num_epochs+1):
         os.system(x+base_dir+"model_"+starting_iter + " --load_chkpt" + " --train_iter "+ending_iter
                  +" && "
                  +"rm ~/ORIE6741_bayesgan/results/"+experiment_name+"/model_"+penultimate_iter+".*")
-"""
+

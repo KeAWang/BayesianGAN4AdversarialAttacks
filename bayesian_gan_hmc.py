@@ -219,6 +219,7 @@ def b_dcgan(dataset, args):
     if args.adv_test and args.semi_supervised:
         if args.basic_iterative:
             fgsm = BasicIterativeMethod(dcgan, sess=session)
+            dcgan.adv_constructor = fgsm
             fgsm_params = {'eps': args.eps,
                     'eps_iter': float(args.eps/4),
                     'nb_iter': 4,
@@ -233,9 +234,9 @@ def b_dcgan(dataset, args):
             fgsm_params = {'eps': args.eps,
                        'clip_min': 0.,
                        'clip_max': 1.}
-            adv_x = fgsm.generate(x,**fgsm_params)
-            adv_test_x = fgsm.generate(test_x,**fgsm_params)
-            preds = dcgan.get_probs(adv_x)
+        adv_x = fgsm.generate(x,**fgsm_params)
+        adv_test_x = fgsm.generate(test_x,**fgsm_params)
+        preds = dcgan.get_probs(adv_x)
     if args.adv_train:
         unlabeled_targets = np.zeros([batch_size,dcgan.K+1])
         unlabeled_targets[:,0] = 1
