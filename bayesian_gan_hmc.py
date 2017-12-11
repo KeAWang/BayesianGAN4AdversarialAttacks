@@ -25,7 +25,7 @@ sys.path.insert(0, '/home/ubuntu/cleverhans')
 #sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
 #sys.path.insert(0, '/home/alex/cleverhans')
 
-from cleverhans.attacks import FastGradientMethod
+from cleverhans.attacks import FastGradientMethod, BasicIterativeMethod
 from cleverhans.utils_tf import model_train, model_eval,model_loss
 from cleverhans.model import Model
 
@@ -217,15 +217,25 @@ def b_dcgan(dataset, args):
                    gen_observed=args.gen_observed, adv_train=args.adv_train,
                    num_classes=dataset.num_classes if args.semi_supervised else 1)
     if args.adv_test and args.semi_supervised:
-        fgsm = FastGradientMethod(dcgan, sess=session)
-        dcgan.adv_constructor = fgsm
-        eval_params = {'batch_size': batch_size}
-        fgsm_params = {'eps': args.eps,
+        if args.basic_iterative:
+            fgsm = BasicIterativeMethod(dcgan, sess=session)
+            fgsm_params = {'eps': args.eps,
+                    'eps_iter': float(args.eps/4),
+                    'nb_iter': 4,
+                    'ord': np.inf,
                    'clip_min': 0.,
                    'clip_max': 1.}
-        adv_x = fgsm.generate(x,**fgsm_params)
-        adv_test_x = fgsm.generate(test_x,**fgsm_params)
-        preds = dcgan.get_probs(adv_x)
+                   #,'y_target': None} 
+        else:
+            fgsm = FastGradientMethod(dcgan, sess=session)
+            dcgan.adv_constructor = fgsm
+            eval_params = {'batch_size': batch_size}
+            fgsm_params = {'eps': args.eps,
+                       'clip_min': 0.,
+                       'clip_max': 1.}
+            adv_x = fgsm.generate(x,**fgsm_params)
+            adv_test_x = fgsm.generate(test_x,**fgsm_params)
+            preds = dcgan.get_probs(adv_x)
     if args.adv_train:
         unlabeled_targets = np.zeros([batch_size,dcgan.K+1])
         unlabeled_targets[:,0] = 1
@@ -559,6 +569,10 @@ if __name__ == "__main__":
     parser.add_argument('--adv_train',
                         action="store_true",
                         help="do adv training")
+
+    parser.add_argument('--basic_iterative',
+                        action="store_true",
+                        help="do basic iterative method of adversarial attack")
 
     parser.add_argument('--wasserstein',
                         action="store_true",
