@@ -174,8 +174,13 @@ class BGAN(object):
             self.d_loss_sup = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.Dsup_logits,
                                                                                      labels=self.labels)) 
             squash_value = 1
+            if self.wasserstein:
+                self.d_loss_real = -tf.reduce_mean(self.D_logits, 0)[0]
+            else:
+                self.d_loss_sup = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.Dsup_logits,
+                                                                                     labels=self.labels))    
+                self.d_loss_real = -tf.reduce_mean(tf.log((1.0 - self.D[:, 0]) + 1e-8))
 
-            self.d_loss_real = -tf.reduce_mean(tf.log((1 - self.D[:, 0]) + 1e-8))
             if self.adv_train:
                 self.d_loss_advlab = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.D_advlab_logits,
                                                                                          labels=self.labels))
@@ -200,7 +205,7 @@ class BGAN(object):
             self.d_loss_fake = -tf.reduce_mean(all_d_logits)
         else:
             constant_labels = np.zeros((self.batch_size*self.num_gen*self.num_mcmc, self.K+1))
-            anti_squash_value = .9
+            anti_squash_value = 1
             constant_labels[:, 0] = anti_squash_value # class label indicating it came from generator, aka fake
             self.d_loss_fake = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=all_d_logits,
                                                                                       labels=tf.constant(constant_labels)))
