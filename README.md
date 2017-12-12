@@ -5,7 +5,7 @@ This repository is built off of the repository created by Andrew Gordon Wilson a
 Our project focuses on performing adversarial testing and training and adversarial example generation. 
 Specifically we use cleverhans to perform fast gradient sign attacks and basic iterative attacks. The necessary repository and paper are located at: https://github.com/tensorflow/cleverhans
 ## Adversarial Testing Options
-===============
+
 --adv_test: Creates an adversarial testing set equal in size to the testing set using the specified adversarial construction method
 --basic_iterative: Uses the basic iterative attack method rather than the default, fast gradient sign method.
 --eps: The epsilon that controls the maximum size of the perturbation for basic iterative and fast gradient sign method. For basic iterative attack method each step is 
