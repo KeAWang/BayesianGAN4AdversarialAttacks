@@ -1,11 +1,19 @@
 
 Bayesian Generative Adversarial Networks in Tensorflow
-===============
+==============
 This repository is built off of the repository created by Andrew Gordon Wilson and Yunus Saatchi which can be found at https://github.com/andrewgordonwilson/bayesgan. In this readme we outline our contributions to the code base and how to use our portion of the code and then include the readme from the original repository which details how to operate the core functions of the Bayesian Gan.
 Our project focuses on performing adversarial testing and training and adversarial example generation. 
-Specifically we use cleverhans to perform fast gradient sign attacks and basic iterative attacks.
+Specifically we use cleverhans to perform fast gradient sign attacks and basic iterative attacks. The necessary repository and paper are located at: https://github.com/tensorflow/cleverhans
+## Adversarial Testing Options
+===============
+--adv_test: Creates an adversarial testing set equal in size to the testing set using the specified adversarial construction method
+--basic_iterative: Uses the basic iterative attack method rather than the default, fast gradient sign method.
+--eps: The epsilon that controls the maximum size of the perturbation for basic iterative and fast gradient sign method. For basic iterative attack method each step is 
+--adv_train: trains the discriminator with adversarial examples constructed from the labeled and unlabeled training samples using the specified adversarial method according to a standard adversarial training procedure. See https://arxiv.org/abs/1412.6572 for further details.
 
-Our data can be found in the AWS_results folder and the settings that we used can be found in the run.py file. The settings are explained in bayesian_gan_hmc.py
+The code will test and store the results every --n_save iterations and save them to the AWS_results folder in a json. The metrics saved during adversarial testing are classification accuracy on adversarial examples, detection accuracy on adversarial examples, average confidence on correctly classified adversarial examples, and average confidence on misclassified adversarial examples. Note that The adversarial training is an experimental feature that has not been thoroughly tested.
+
+Our results can be found in the AWS_results folder and the settings that we used can be found in the run.py file. The settings are explained in bayesian_gan_hmc.py
 ===============
 
 
