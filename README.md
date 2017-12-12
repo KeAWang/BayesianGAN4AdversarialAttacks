@@ -5,7 +5,7 @@ This repository is built off of the repository created by Andrew Gordon Wilson a
 Our project focuses on performing adversarial testing and training and adversarial example generation. 
 Specifically we use cleverhans to perform fast gradient sign attacks and basic iterative attacks.
 
-Our data can be found in the AWS_results folder and the settings that we used can be found in the run.py file. The settings are explained in bayesgan_sghmc.py
+Our data can be found in the AWS_results folder and the settings that we used can be found in the run.py file. The settings are explained in bayesian_gan_hmc.py
 ===============
 
 
