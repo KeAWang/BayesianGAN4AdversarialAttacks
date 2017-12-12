@@ -1,5 +1,11 @@
+
 Bayesian Generative Adversarial Networks in Tensorflow
 ===============
+This repository is built off of the repository created by Andrew Gordon Wilson and Yunus Saatchi which can be found at https://github.com/andrewgordonwilson/bayesgan. In this readme we outline our contributions to the code base and how to use our portion of the code and then include the readme from the original repository which details how to operate the core functions of the Bayesian Gan.
+Our project focuses on performing adversarial testing and training and adversarial example generation. 
+
+===============
+
 
 This repository contains the Tensorflow implementation of the [Bayesian GAN](https://arxiv.org/abs/1705.09558) by Yunus Saatchi and Andrew Gordon Wilson.  This paper will be appearing at NIPS 2017.
 
