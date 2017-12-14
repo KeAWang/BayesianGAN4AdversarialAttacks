@@ -11,7 +11,7 @@ Specifically we use cleverhans to perform fast gradient sign attacks and basic i
 - `--eps`: The epsilon that controls the maximum size of the perturbation for basic iterative and fast gradient sign method. For basic iterative attack method each step is 
 - `--adv_train`: trains the discriminator with adversarial examples constructed from the labeled and unlabeled training samples using the specified method according to a standard adversarial training procedure. See https://arxiv.org/abs/1412.6572 for further details.
 
-The code will test and store the results every `--n_save` iterations and save them to the AWS_results folder in a json. The metrics saved during adversarial testing are classification accuracy on adversarial examples, detection accuracy on adversarial examples, average confidence on correctly classified adversarial examples, and average confidence on misclassified adversarial examples. Note that The adversarial training is an experimental feature that has not been thoroughly tested.
+The code will test and store the results every `--n_save` iterations and save them to the AWS_results folder in a json. The metrics saved during adversarial testing are classification accuracy on adversarial examples, detection accuracy on adversarial examples, average confidence on correctly classified adversarial examples, and average confidence on misclassified adversarial examples. Note that the adversarial training has has not been thoroughly tested for correctness but is functioning.
 
 Our results can be found in the AWS_results folder and the settings that we used can be found in the run.py file. The settings are explained in bayesian_gan_hmc.py
 
