@@ -58,8 +58,8 @@ class BGAN(object):
         for name, dim in self.weight_dims.items():
             self.sghmc_noise[name] = tf.distributions.Normal(loc=0., scale=self.noise_std*tf.ones(self.weight_dims[name]))
 
-        self.K = num_classes # 1 means unsupervised, label == 0 always reserved for fake
-
+        self.K = 2*num_classes # 1 means unsupervised, label == 0 always reserved for fake
+        print(self.K)
         self.build_bgan_graph()
 
         if self.K > 1:
@@ -83,7 +83,7 @@ class BGAN(object):
 
         self.S, self.S_logits = self.sup_discriminator(self.inputs, self.K)
 
-        self.test_D, self.test_D_logits = self.discriminator(self.test_inputs, self.K+1, reuse=True)
+        self.test_D, self.test_D_logits = self.discriminator(self.test_inputs, self.K, reuse=True)
         self.test_S, self.test_S_logits = self.sup_discriminator(self.test_inputs, self.K, reuse=True)
 
         self.s_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.S_logits,
@@ -116,7 +116,8 @@ class BGAN(object):
         #            'y_target': y
         #            }
 
-
+        self.generated_labels = tf.placeholder(tf.float32,
+                                     [self.batch_size, self.K*self.num_mcmc*self.num_gen], name='generated_target')
         self.inputs = tf.placeholder(tf.float32,
                                      [self.batch_size] + self.x_dim, name='real_images')
 
@@ -128,10 +129,10 @@ class BGAN(object):
                                              [self.batch_size] + self.x_dim, name='real_images_w_labels')
         
         self.labels = tf.placeholder(tf.float32,
-                                     [self.batch_size, self.K+1], name='real_targets')
+                                     [self.batch_size, self.K], name='real_targets')
 
         self.targets = tf.placeholder(tf.float32,
-                                     [self.batch_size, self.K+1], name='targets')
+                                     [self.batch_size, self.K], name='targets')
 
         self.z = tf.placeholder(tf.float32, [None, self.z_dim], name='z')
 
@@ -155,11 +156,11 @@ class BGAN(object):
         # self.adv_labeled_inputs = self.fgsm.generate(self.labeled_inputs,**self.fgsm_params)
         # self.adv_unlab_inputs = self.fgsm.generate(self.inputs,**self.fgsm_unlab_params)
 
-        self.D, self.D_logits = self.discriminator(self.inputs, self.K+1)
-        self.Dsup, self.Dsup_logits = self.discriminator(self.labeled_inputs, self.K+1, reuse=True)
+        self.D, self.D_logits = self.discriminator(self.inputs, self.K)
+        self.Dsup, self.Dsup_logits = self.discriminator(self.labeled_inputs, self.K, reuse=True)
         if self.adv_train:
-            self.D_advlab, self.D_advlab_logits = self.discriminator(self.adv_labeled, self.K+1, reuse = True)
-            self.D_advunlab, self.D_advunlab_logits = self.discriminator(self.adv_unlab, self.K+1, reuse = True)
+            self.D_advlab, self.D_advlab_logits = self.discriminator(self.adv_labeled, self.K, reuse = True)
+            self.D_advunlab, self.D_advunlab_logits = self.discriminator(self.adv_unlab, self.K, reuse = True)
 
         if self.K == 1:
             if self.wasserstein:
@@ -195,7 +196,7 @@ class BGAN(object):
             self.generation["generators"].append(self.generator(self.z, gen_params))
             self.generation["gen_samplers"].append(self.sampler(self.z, gen_params))
             #self.adv_fake.append(fgsm())
-            D_, D_logits_ = self.discriminator(self.generator(self.z, gen_params), self.K+1, reuse=True)
+            D_, D_logits_ = self.discriminator(self.generator(self.z, gen_params), self.K, reuse=True)
             self.generation["d_logits"].append(D_logits_)
             self.generation["d_probs"].append(D_)
             
@@ -204,11 +205,11 @@ class BGAN(object):
         if self.wasserstein:
             self.d_loss_fake = -tf.reduce_mean(all_d_logits)
         else:
-            constant_labels = np.zeros((self.batch_size*self.num_gen*self.num_mcmc, self.K+1))
+            constant_labels = np.zeros((self.batch_size*self.num_gen*self.num_mcmc, self.K))
             anti_squash_value = 1
             constant_labels[:, 0] = anti_squash_value # class label indicating it came from generator, aka fake
             self.d_loss_fake = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=all_d_logits,
-                                                                                      labels=tf.constant(constant_labels)))
+                                                                                      labels=self.generated_labels))
 
         t_vars = tf.trainable_variables()
         self.d_vars = [var for var in t_vars if 'd_' in var.name]
@@ -417,7 +418,7 @@ class BDCGAN(BGAN, Model):
         for name, dim in self.weight_dims.items():
             self.sghmc_noise[name] = tf.distributions.Normal(loc=0., scale=self.noise_std*tf.ones(self.weight_dims[name]))
 
-        self.K = num_classes # 1 means unsupervised, label == 0 always reserved for fake
+        self.K = 2*num_classes # 1 means unsupervised, label == 0 always reserved for fake
 
         self.build_bgan_graph()
 
@@ -545,6 +546,6 @@ class BDCGAN(BGAN, Model):
 
     def get_probs(self, x):
         #probs = self.test_D
-        probs, _ = self.discriminator(x, self.K+1, reuse=True)
+        probs, _ = self.discriminator(x, self.K, reuse=True)
         return probs
 

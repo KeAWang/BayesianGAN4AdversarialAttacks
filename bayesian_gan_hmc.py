@@ -46,12 +46,36 @@ def get_session():
 def get_gan_labels(lbls):
     # add class 0 which is the "fake" class
     if lbls is not None:
-        labels = np.zeros((lbls.shape[0], lbls.shape[1] + 1))
-        labels[:, 1:] = lbls
+        #labels = np.zeros((lbls.shape[0], lbls.shape[1] + 1))
+        labels = np.zeros((lbls.shape[0], lbls.shape[1]*2))#Change to 2k possibly instead of 2k+1
+        #labels[:, 1:] = lbls
+        labels[:, :lbls.shape[1]] = lbls
     else:
         labels = None
     return labels
 
+def get_sup_labels(lbls):
+    # add class 0 which is the "fake" class
+    if lbls is not None:
+        #labels = np.zeros((lbls.shape[0], lbls.shape[1] + 1))
+        labels = np.zeros((lbls.shape[0], lbls.shape[1]*2))#Change to 2k possibly instead of 2k+1
+        #labels[:, 1:] = lbls
+        labels[:, :lbls.shape[1]] = lbls
+    else:
+        labels = None
+    return labels
+
+def create_gen_batch(z_dim, batch_size, num_classes):
+    #Creates Z vector with class randomly generated class label
+    class_label = np.eye(num_classes)
+    class_label = class_label[np.random.choice(class_label.shape[0], size=batch_size)]
+    batch_z = np.random.uniform(-1, 1, [batch_size, z_dim])
+    total_input = np.zeros((batch_size, num_classes+z_dim))
+    total_input[:,:z_dim] = batch_z
+    total_input[:,z_dim:] = class_label
+    target_label = np.zeros((batch_size, num_classes*2))
+    target_label[:,num_classes:] = class_label
+    return total_input, target_label
 
 def get_supervised_batches(dataset, size, batch_size, class_ids):
 
@@ -192,7 +216,6 @@ def get_certainty_for_adv(session, dcgan, all_test_img_batches,all_test_lbls):
 
 
 def b_dcgan(dataset, args):
-
     z_dim = args.z_dim
     x_dim = dataset.x_dim
     batch_size = args.batch_size
@@ -209,7 +232,7 @@ def b_dcgan(dataset, args):
     if args.random_seed is not None:
 	    tf.set_random_seed(args.random_seed)
     # due to how much the TF code sucks all functions take fixed batch_size at all times
-    dcgan = BDCGAN(x_dim, z_dim, dataset_size, batch_size=batch_size, J=args.J, M=args.M, 
+    dcgan = BDCGAN(x_dim, z_dim + dataset.num_classes, dataset_size, batch_size=batch_size, J=args.J, M=args.M, 
                    lr=args.lr, optimizer=args.optimizer,
                    gen_observed=args.gen_observed, adv_train=args.adv_train,
                    num_classes=dataset.num_classes if args.semi_supervised else 1)
@@ -235,7 +258,6 @@ def b_dcgan(dataset, args):
                    'clip_max': 1.}
         adv_x = fgsm.generate(x,**fgsm_params)
         adv_test_x = fgsm.generate(test_x,**fgsm_params)
-        print('passed')
         #preds = dcgan.get_probs(adv_x)
     if args.adv_train:
         unlabeled_targets = np.zeros([batch_size,dcgan.K+1])
@@ -298,7 +320,9 @@ def b_dcgan(dataset, args):
         learning_rate = base_learning_rate * np.exp(-lr_decay_rate *
                                                     min(1.0, (train_iter*batch_size)/float(dataset_size)))
 
-        batch_z = np.random.uniform(-1, 1, [batch_size, z_dim])
+        #batch_z = np.random.uniform(-1, 1, [batch_size, z_dim])
+        batch_z, class_labels = create_gen_batch(z_dim, batch_size, dataset.num_classes)
+        print(batch_z.shape,dcgan.z)
         image_batch, batch_label = dataset.next_batch(batch_size, class_id=None)
         batch_targets = np.zeros([batch_size,11])
         batch_targets[:,0] = 1
@@ -322,11 +346,12 @@ def b_dcgan(dataset, args):
                                                                                                   dcgan.labels: get_gan_labels(labels),
                                                                                                   dcgan.inputs: image_batch,
                                                                                                   dcgan.z: batch_z,
+                                                                                                  dcgan.generated_labels: class_labels,
                                                                                                   dcgan.d_semi_learning_rate: learning_rate
                                                                                                   })
 
             _, s_loss = session.run([optimizer_dict["sup_d"], dcgan.s_loss], feed_dict={dcgan.inputs: labeled_image_batch,
-                                                                                        dcgan.lbls: labels})
+                                                                                        dcgan.lbls: get_sup_labels(labels)})
             
         else:
             # regular GAN
@@ -342,30 +367,13 @@ def b_dcgan(dataset, args):
         for gi in range(dcgan.num_gen):
 
             # compute g_sample loss
-            batch_z = np.random.uniform(-1, 1, [batch_size, z_dim])
+            #batch_z = np.random.uniform(-1, 1, [batch_size, z_dim])
+            batch_z, class_labels = create_gen_batch(z_dim, batch_size, dataset.num_classes)
             for m in range(dcgan.num_mcmc):
                 _, g_loss = session.run([optimizer_dict["gen"][gi*dcgan.num_mcmc+m], dcgan.generation["g_losses"][gi*dcgan.num_mcmc+m]],
                                         feed_dict={dcgan.z: batch_z, dcgan.g_learning_rate: learning_rate})
                 g_losses.append(g_loss)
 
-        # if args.adv_test:
-        #     probs, logits = dcgan.discriminator(adv_x,dcgan.K+1,reuse = True)
-            
-        #     labels = tf.placeholder(tf.float32,
-        #                              [args.batch_size, dcgan.K+1], name='real_targets')
-        #     compare_labels = tf.convert_to_tensor(np.array([np.append(0,i) for i in batch_label]))
-
-        #     print(session.run(model_loss(compare_labels,probs), feed_dict = {x:image_batch}))
-        # if args.adv_test:
-        #     #preds = dcgan.get_probs(adv_x)
-        #     #eval_preds = session.run(preds, feed_dict = {x:image_batch})
-        #     #print(eval_preds[0])
-        #     #adv_exs = session.run(adv_test_x, feed_dict = {x:test_image_batches})
-        #     # adv_acc = model_eval(
-        #     #     session, x, y, preds, image_batch, batch_label, args=eval_params)
-        #     # #print(session.run(model_loss(compare_labels,probs), feed_dict = {x:image_batch}))
-        #     # print("Adversarial loss = %2.f" % (1-adv_acc))
-        #     print(get_test_accuracy(session,dcgan,adv_set,test_label_batches))
 
         if train_iter > 0 and train_iter % args.n_save == 0:
             print("Iter %i" % train_iter)
@@ -375,7 +383,8 @@ def b_dcgan(dataset, args):
                 for gi in range(dcgan.num_gen):
                     _imgs, _ps = [], []
                     for _ in range(10):
-                        sample_z = np.random.uniform(-1, 1, size=(batch_size, z_dim))
+                        #sample_z = np.random.uniform(-1, 1, size=(batch_size, z_dim))
+                        batch_z, class_labels = create_gen_batch(z_dim, batch_size, dataset.num_classes)
                         sampled_imgs, sampled_probs = session.run([dcgan.generation["gen_samplers"][gi*dcgan.num_mcmc],
                                                                    dcgan.generation["d_probs"][gi*dcgan.num_mcmc]],
                                                                   feed_dict={dcgan.z: sample_z})
@@ -386,24 +395,6 @@ def b_dcgan(dataset, args):
                     all_sampled_imgs.append([sampled_imgs, sampled_probs[:, 1:].sum(1)])
 
             print("Disc loss = %.2f, Gen loss = %s" % (d_loss, ", ".join(["%.2f" % gl for gl in g_losses])))
-
-            #if args.adv_test:
-            #preds = dcgan.get_probs(adv_x)
-            #eval_preds = session.run(preds, feed_dict = {x:image_batch})
-            #print(eval_preds[0])
-            #adv_exs = session.run(adv_test_x, feed_dict = {x:test_image_batches})
-            # adv_acc = model_eval(
-            #     session, x, y, preds, image_batch, batch_label, args=eval_params)
-            # #print(session.run(model_loss(compare_labels,probs), feed_dict = {x:image_batch}))
-            # print("Adversarial loss = %2.f" % (1-adv_acc))
-                #print(get_test_accuracy(session,dcgan,adv_set,test_label_batches))
-
-                # adv_x = fgsm.generate(x,**fgsm_params)
-                # preds = dcgan.get_probs(adv_x)
-                # acc = model_eval(
-                #     session, x, y, preds, image_batch, batch_label, args=eval_params)
-                # print("Adversarial loss = %2.f" % (1-acc))
-
 
             if args.semi_supervised:
                 # get test set performance on real labels only for both GAN-based classifier and standard one
@@ -429,8 +420,6 @@ def b_dcgan(dataset, args):
             results = {"disc_loss": float(d_loss),
                        "gen_losses": list(map(float, g_losses))}
             if args.semi_supervised:
-                #results["example_non_adversarial_probs"] = list(ex_prob.flatten())
-                #results["example_adversarial_probs"] = list(adv_ex_prob.flatten())
                 results["non_adversarial_classification_accuracy"] = float(non_adv_acc)
                 results["adversarial_classification_accuracy"] = float(adv_acc)
                 results["adversarial_uncertainty_correct"] = float(correct_uncertainty)
@@ -449,11 +438,6 @@ def b_dcgan(dataset, args):
                 for gi in range(dcgan.num_gen):
                     print_images(all_sampled_imgs[gi], "B_DCGAN_%i_%.2f" % (gi, g_losses[gi*dcgan.num_mcmc]),
                                  train_iter, directory=args.out_dir)
-                #if args.adv_test:
-                    #for i in range(24):
-                        #imsave('test_image' + str(train_iter) + str(i), test_image_batches[0][i])
-                        #imsave('adversarial_images' + str(train_iter) + str(i), adv_set[i])
-                    #print_images(adv_set[:20], "adversarial", train_iter, directory = args.out_dir)
                 print_images(image_batch, "RAW", train_iter, directory=args.out_dir)
 
             if args.save_weights:
