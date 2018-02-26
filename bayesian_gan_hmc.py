@@ -21,7 +21,7 @@ from bgan_models import BDCGAN
 import sys
 
 #sys.path.insert(0, '/home/ubuntu/cleverhans')
-sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
+sys.path.insert(0, 'C:/Users/mcw24/Documents/Research/cleverhans')
 #sys.path.insert(0, '/home/alex/cleverhans')
 from scipy.misc import imsave
 from cleverhans.attacks import FastGradientMethod, SaliencyMapMethod, BasicIterativeMethod
@@ -74,8 +74,10 @@ def create_gen_batch(z_dim, batch_size, num_classes):
     total_input[:,:z_dim] = batch_z
     total_input[:,z_dim:] = class_label
     target_label = np.zeros((batch_size, num_classes*2))
+    trick_label = np.zeros((batch_size, num_classes*2))
     target_label[:,num_classes:] = class_label
-    return total_input, target_label
+    trick_label[:,:num_classes] = class_label
+    return total_input, target_label, trick_label
 
 def get_supervised_batches(dataset, size, batch_size, class_ids):
 
@@ -155,7 +157,7 @@ def get_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
         print("WARNING: not enough samples for SS results")
     non_adv_acc = len(not_fake)/len(test_lbls)
     print("Test images discriminator thinks are not fake:" + str(len(not_fake)))
-    semi_sup_acc = (100. * np.sum(np.argmax(test_d_logits[not_fake], 1) == np.argmax(test_lbls[not_fake], 1) + 1))\
+    semi_sup_acc = (100. * np.sum(np.argmax(test_d_logits[not_fake], 1) == np.argmax(test_lbls[not_fake], 1)))\
                    / len(not_fake)
     sup_acc = (100. * np.sum(np.argmax(test_s_logits, 1) == np.argmax(test_lbls, 1)))\
               / test_lbls.shape[0]
@@ -178,16 +180,17 @@ def get_adv_test_accuracy(session, dcgan, all_test_img_batches, all_test_lbls):
     test_d_logits = np.concatenate(all_d_logits)
     test_lbls = np.concatenate(all_test_lbls)
     test_d = np.concatenate(all_d)
-    not_fake = np.where(test_d[:,0] < 0.45)[0]
+    not_fake = np.where(np.sum(test_d[:,int(dcgan.K/2):], axis = 0) < 0.5)[0]
     #not_fake = [i for i,x in enumerate(test_d) if x[0] < .45]
     #not_fake = np.where(np.argmax(test_d_logits, 1) > 0)[0]
     if len(not_fake) < 10:
         print("WARNING: not enough samples for SS results")
     print("Adversarial images discriminator thinks are not fake:" + str(len(not_fake)))
     adv_accuracy = len(not_fake)/len(test_lbls)
-    semi_sup_acc = (100. * np.sum(np.argmax(test_d_logits[not_fake], 1) == np.argmax(test_lbls[not_fake], 1) + 1))\
+   	combined_labels = np.zeros([num_classes])
+    semi_sup_acc = (100. * np.sum(np.argmax(test_d_logits[not_fake], 1)-dcgan.num_classes == np.argmax(test_lbls[not_fake], 1)))\
                    / len(not_fake)
-    semi_sup_acc_unfilter = (100. * np.sum(np.argmax(test_d_logits[:,1:], 1) == np.argmax(test_lbls, 1)))\
+    semi_sup_acc_unfilter = (100. * np.sum((np.argmax(test_d_logits[:,1:], 1)-dcgan.num_classes == np.argmax(test_lbls, 1))))\
                    / len(test_d_logits)
 
     correct_certainty = np.mean([i[0] for i,j in zip(test_d,test_lbls) if np.argmax(i[1:]) == np.argmax(j)])
@@ -321,8 +324,9 @@ def b_dcgan(dataset, args):
                                                     min(1.0, (train_iter*batch_size)/float(dataset_size)))
 
         #batch_z = np.random.uniform(-1, 1, [batch_size, z_dim])
-        batch_z, class_labels = create_gen_batch(z_dim, batch_size, dataset.num_classes)
-        print(batch_z.shape,dcgan.z)
+        batch_z, class_labels, trick_labels = create_gen_batch(z_dim, batch_size, dataset.num_classes)
+        class_labels = np.array(list(class_labels)*(args.J*args.M))#Duplicates class labels for each numz and num_mcmc
+        #print(batch_z.shape,dcgan.z)
         image_batch, batch_label = dataset.next_batch(batch_size, class_id=None)
         batch_targets = np.zeros([batch_size,11])
         batch_targets[:,0] = 1
@@ -342,9 +346,10 @@ def b_dcgan(dataset, args):
                                                                                                   dcgan.adv_labeled: adv_labeled
                                                                                                   })
             else:
-                _, d_loss = session.run([optimizer_dict["semi_d"], dcgan.d_loss_semi], feed_dict={dcgan.labeled_inputs: labeled_image_batch,
+                _, d_loss, check = session.run([optimizer_dict["semi_d"], dcgan.d_loss_semi, dcgan.check], feed_dict={dcgan.labeled_inputs: labeled_image_batch,
                                                                                                   dcgan.labels: get_gan_labels(labels),
                                                                                                   dcgan.inputs: image_batch,
+                                                                                                  dcgan.trick_labels: trick_labels,
                                                                                                   dcgan.z: batch_z,
                                                                                                   dcgan.generated_labels: class_labels,
                                                                                                   dcgan.d_semi_learning_rate: learning_rate
@@ -368,10 +373,11 @@ def b_dcgan(dataset, args):
 
             # compute g_sample loss
             #batch_z = np.random.uniform(-1, 1, [batch_size, z_dim])
-            batch_z, class_labels = create_gen_batch(z_dim, batch_size, dataset.num_classes)
+            batch_z, class_labels,trick_labels = create_gen_batch(z_dim, batch_size, dataset.num_classes)
+            class_labels = np.array(class_labels*(args.J*args.M))
             for m in range(dcgan.num_mcmc):
                 _, g_loss = session.run([optimizer_dict["gen"][gi*dcgan.num_mcmc+m], dcgan.generation["g_losses"][gi*dcgan.num_mcmc+m]],
-                                        feed_dict={dcgan.z: batch_z, dcgan.g_learning_rate: learning_rate})
+                                        feed_dict={dcgan.z: batch_z, dcgan.g_learning_rate: learning_rate, dcgan.trick_labels: trick_labels})
                 g_losses.append(g_loss)
 
 
@@ -384,7 +390,8 @@ def b_dcgan(dataset, args):
                     _imgs, _ps = [], []
                     for _ in range(10):
                         #sample_z = np.random.uniform(-1, 1, size=(batch_size, z_dim))
-                        batch_z, class_labels = create_gen_batch(z_dim, batch_size, dataset.num_classes)
+                        sample_z, class_labels, _ = create_gen_batch(z_dim, batch_size, dataset.num_classes)
+
                         sampled_imgs, sampled_probs = session.run([dcgan.generation["gen_samplers"][gi*dcgan.num_mcmc],
                                                                    dcgan.generation["d_probs"][gi*dcgan.num_mcmc]],
                                                                   feed_dict={dcgan.z: sample_z})
@@ -395,6 +402,7 @@ def b_dcgan(dataset, args):
                     all_sampled_imgs.append([sampled_imgs, sampled_probs[:, 1:].sum(1)])
 
             print("Disc loss = %.2f, Gen loss = %s" % (d_loss, ", ".join(["%.2f" % gl for gl in g_losses])))
+            #print("Check value:", check)
 
             if args.semi_supervised:
                 # get test set performance on real labels only for both GAN-based classifier and standard one
@@ -429,6 +437,7 @@ def b_dcgan(dataset, args):
                 results["adversarial_unfilted_semi_supervised_acc"] = float(adv_ss_acc)
                 results["semi_supervised_acc"] = float(ss_acc)
                 results["timestamp"] = time.time()
+                results["probabilities"] = check.tolist()
                 results["previous_chkpt"] = args.chkpt
 
             with open(os.path.join(args.out_dir, 'results_%i.json' % train_iter), 'w') as fp:
@@ -619,7 +628,7 @@ if __name__ == "__main__":
     if args.custom_experiment != '':
         args.out_dir = os.path.join(args.out_dir, args.custom_experiment)
     else:
-        args.out_dir = os.path.join(args.out_dir, "bgan_%s_%s" % (args.dataset, str(datetime.now())))
+        args.out_dir = os.path.join(args.out_dir, "bgan_%s_%s" % (args.dataset, str(datetime.now()).replace(':','_')))
 
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)

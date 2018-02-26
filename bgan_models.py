@@ -9,7 +9,7 @@ from bgan_util import AttributeDict
 #### Bayesian DCGAN
 import sys
 #sys.path.insert(0, '/home/ubuntu/cleverhans')
-sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
+sys.path.insert(0, 'C:/Users/mcw24/Documents/Research/cleverhans')
 #sys.path.insert(0, '/home/alex/cleverhans')
 from cleverhans.attacks import FastGradientMethod
 from cleverhans.utils_tf import model_train, model_eval, model_loss
@@ -59,7 +59,7 @@ class BGAN(object):
             self.sghmc_noise[name] = tf.distributions.Normal(loc=0., scale=self.noise_std*tf.ones(self.weight_dims[name]))
 
         self.K = 2*num_classes # 1 means unsupervised, label == 0 always reserved for fake
-        print(self.K)
+        self.num_classes = num_classes
         self.build_bgan_graph()
 
         if self.K > 1:
@@ -115,9 +115,10 @@ class BGAN(object):
         #            'clip_max': 1.,
         #            'y_target': y
         #            }
-
+        self.trick_labels =  tf.placeholder(tf.float32,
+                                     [self.batch_size, self.K], name='generated_real_target')
         self.generated_labels = tf.placeholder(tf.float32,
-                                     [self.batch_size, self.K*self.num_mcmc*self.num_gen], name='generated_target')
+                                     [self.batch_size*self.num_gen*self.num_mcmc, self.K], name='generated_target')
         self.inputs = tf.placeholder(tf.float32,
                                      [self.batch_size] + self.x_dim, name='real_images')
 
@@ -179,8 +180,11 @@ class BGAN(object):
                 self.d_loss_real = -tf.reduce_mean(self.D_logits, 0)[0]
             else:
                 self.d_loss_sup = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.Dsup_logits,
-                                                                                     labels=self.labels))    
-                self.d_loss_real = -tf.reduce_mean(tf.log((1.0 - self.D[:, 0]) + 1e-8))
+                                                                                     labels=self.labels))   
+                print('d_loss_sup:', self.d_loss_sup)
+                #self.d_loss_real = -tf.reduce_mean(tf.log((1.0 - self.D[:, 0]) + 1e-8))
+                self.d_loss_real = -tf.reduce_mean(tf.log((1.0 - tf.reduce_sum(self.D[:, self.num_classes:],1)) + 1e-8))
+
 
             if self.adv_train:
                 self.d_loss_advlab = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.D_advlab_logits,
@@ -200,7 +204,7 @@ class BGAN(object):
             self.generation["d_logits"].append(D_logits_)
             self.generation["d_probs"].append(D_)
             
-
+        all_d_probs = tf.concat(self.generation["d_probs"], 0)
         all_d_logits = tf.concat(self.generation["d_logits"], 0)
         if self.wasserstein:
             self.d_loss_fake = -tf.reduce_mean(all_d_logits)
@@ -208,8 +212,13 @@ class BGAN(object):
             constant_labels = np.zeros((self.batch_size*self.num_gen*self.num_mcmc, self.K))
             anti_squash_value = 1
             constant_labels[:, 0] = anti_squash_value # class label indicating it came from generator, aka fake
-            self.d_loss_fake = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=all_d_logits,
-                                                                                      labels=self.generated_labels))
+            self.d_loss_fake_targeted = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=all_d_logits,
+                                                                                       labels=self.generated_labels))
+            #print(all_d_logits[:, int(self.K/2):].shape)
+            #print(all_d_logits.shape)
+            self.check = all_d_probs#tf.log((1.0 - tf.reduce_sum(all_d_probs[:, self.num_classes:], 1, keepdims =True) + 1e-8))
+            self.d_loss_fake = -tf.reduce_mean(tf.log((1.0 - tf.reduce_sum(all_d_probs[:, self.num_classes:], 1, keepdims =True) + 1e-8)))
+            #print(self.d_loss_fake)
 
         t_vars = tf.trainable_variables()
         self.d_vars = [var for var in t_vars if 'd_' in var.name]
@@ -260,7 +269,13 @@ class BGAN(object):
             if self.wasserstein:
                 g_loss = tf.reduce_mean(self.generation["d_logits"][gi])
             else:
-                g_loss = -tf.reduce_mean(tf.log((1.0 - self.generation["d_probs"][gi][:, 0]) + 1e-8))
+                # trick_labels = np.zeros([self.batch_size,self.K])
+                # trick_labels[:,:int(self.K/2)] = self.generated_labels[:,int(self.K/2):]
+                # g_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.generation["d_logits"][gi],
+                #                                                           labels=self.trick_labels))
+                #g_loss = -tf.reduce_mean(tf.log((1.0 - self.generation["d_logits"][gi][:, 0]) + 1e-8))
+                print('reduced sum', tf.reduce_sum(self.generation["d_probs"][gi][:, :self.num_classes], 1)[0])
+                g_loss = -tf.reduce_mean(tf.log((1.0 - tf.reduce_sum(self.generation["d_probs"][gi][:, :self.num_classes], 1, keepdims = True) + 1e-8)))
             if not self.ml:
                 g_loss += self.generation["g_prior"][gi] + self.generation["g_noise"][gi]
             self.generation["g_losses"].append(g_loss)
@@ -349,7 +364,7 @@ class BDCGAN(BGAN, Model):
         
         c_dim = x_dim[2]
         self.is_grayscale = (c_dim == 1)
-        self.optimizer = optimizer.lower()
+        self.optimizer = optimizer.lower()      
         self.dataset_size = dataset_size
         self.batch_size = batch_size
         self.gen_observed = gen_observed
@@ -419,7 +434,7 @@ class BDCGAN(BGAN, Model):
             self.sghmc_noise[name] = tf.distributions.Normal(loc=0., scale=self.noise_std*tf.ones(self.weight_dims[name]))
 
         self.K = 2*num_classes # 1 means unsupervised, label == 0 always reserved for fake
-
+        self.num_classes = num_classes
         self.build_bgan_graph()
 
         if self.K > 1:
