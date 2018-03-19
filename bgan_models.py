@@ -143,6 +143,8 @@ class BGAN(object):
         self.adv_labeled = tf.placeholder(tf.float32,
                                              [self.batch_size] + self.x_dim, name='real_images_w_labels')
 
+        self.conditional_weighting = tf.placeholder(tf.float32, name = 'proportion_between')
+
         #self.z_sum = histogram_summary("z", self.z) TODO looks cool
 
         self.gen_param_list = []
@@ -181,9 +183,8 @@ class BGAN(object):
             else:
                 self.d_loss_sup = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.Dsup_logits,
                                                                                      labels=self.labels))   
-                print('d_loss_sup:', self.d_loss_sup)
-                #self.d_loss_real = -tf.reduce_mean(tf.log((1.0 - self.D[:, 0]) + 1e-8))
-                self.d_loss_real = -tf.reduce_mean(tf.log((1.0 - tf.reduce_sum(self.D[:, self.num_classes:],1)) + 1e-8))
+
+                self.d_loss_real = -tf.reduce_mean(tf.log((1.0 - tf.reduce_sum(self.D[:, self.num_classes:], axis = 1, keepdims = True)) + 1e-8))
 
 
             if self.adv_train:
@@ -213,11 +214,13 @@ class BGAN(object):
             anti_squash_value = 1
             constant_labels[:, 0] = anti_squash_value # class label indicating it came from generator, aka fake
             self.d_loss_fake_targeted = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=all_d_logits,
-                                                                                       labels=self.generated_labels))
+                                                                                       labels=self.generated_labels)) #+ .5*tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=all_d_logits,
+                                                                                       #labels= tf.concat([self.generated_labels[self.num_classes:], self.generated_labels[:self.num_classes]], 0)))
+                                                                                       # + self.conditional_weighting*-tf.reduce_mean(tf.log((1.0 - tf.reduce_sum(all_d_probs[:, :self.num_classes], axis = 1, keepdims =True) + 1e-8)))
             #print(all_d_logits[:, int(self.K/2):].shape)
             #print(all_d_logits.shape)
             self.check = all_d_probs#tf.log((1.0 - tf.reduce_sum(all_d_probs[:, self.num_classes:], 1, keepdims =True) + 1e-8))
-            self.d_loss_fake = -tf.reduce_mean(tf.log((1.0 - tf.reduce_sum(all_d_probs[:, self.num_classes:], 1, keepdims =True) + 1e-8)))
+            self.d_loss_fake = -tf.reduce_mean(tf.log((1.0 - tf.reduce_sum(all_d_probs[:, :self.num_classes], axis = 1, keepdims =True) + 1e-8)))
             #print(self.d_loss_fake)
 
         t_vars = tf.trainable_variables()
@@ -237,9 +240,11 @@ class BGAN(object):
                                     /(num_sup+num_unsup+num_fake+self.lam*num_adv)
             else: 
                 self.d_loss_semi = self.d_loss_sup + self.d_loss_real + self.d_loss_fake
+                self.d_loss_semi_custom = self.d_loss_sup + self.d_loss_real + .1*self.d_loss_fake_targeted #+ self.d_loss_fake
                 
             if not self.ml:
                 self.d_loss_semi += self.disc_prior() + self.disc_noise()
+                self.d_loss_semi_custom += self.disc_prior() + self.disc_noise()
 
         self.g_vars = []
         for gi in range(self.num_gen):
@@ -260,10 +265,16 @@ class BGAN(object):
             self.d_semi_learning_rate = tf.placeholder(tf.float32, shape=[])
             d_opt_semi = self._get_optimizer(self.d_semi_learning_rate)
             self.d_optim_semi = d_opt_semi.minimize(self.d_loss_semi, var_list=self.d_vars)
+            d_opt_semi_adam_custom = tf.train.AdamOptimizer(learning_rate=self.d_semi_learning_rate, beta1=0.5)
+            self.d_optim_semi_adam_custom = d_opt_semi_adam_custom.minimize(self.d_loss_semi_custom, var_list=self.d_vars)
+
             d_opt_semi_adam = tf.train.AdamOptimizer(learning_rate=self.d_semi_learning_rate, beta1=0.5)
             self.d_optim_semi_adam = d_opt_semi_adam.minimize(self.d_loss_semi, var_list=self.d_vars)
         
-        self.g_optims, self.g_optims_adam = [], []
+        self.g_optims = []
+        self.g_optims_adam = []
+        self.g_optims_adam_custom = []
+
         self.g_learning_rate = tf.placeholder(tf.float32, shape=[])
         for gi in range(self.num_gen*self.num_mcmc):
             if self.wasserstein:
@@ -271,18 +282,26 @@ class BGAN(object):
             else:
                 # trick_labels = np.zeros([self.batch_size,self.K])
                 # trick_labels[:,:int(self.K/2)] = self.generated_labels[:,int(self.K/2):]
-                # g_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.generation["d_logits"][gi],
-                #                                                           labels=self.trick_labels))
+                g_loss_custom = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.generation["d_logits"][gi],
+                                                                           labels=self.trick_labels))
                 #g_loss = -tf.reduce_mean(tf.log((1.0 - self.generation["d_logits"][gi][:, 0]) + 1e-8))
-                print('reduced sum', tf.reduce_sum(self.generation["d_probs"][gi][:, :self.num_classes], 1)[0])
-                g_loss = -tf.reduce_mean(tf.log((1.0 - tf.reduce_sum(self.generation["d_probs"][gi][:, :self.num_classes], 1, keepdims = True) + 1e-8)))
+                #print('reduced sum', tf.reduce_sum(self.generation["d_probs"][gi][:, :self.num_classes], 1)[0])
+                g_loss = -tf.reduce_mean(tf.log((1.0 - tf.reduce_sum(self.generation["d_probs"][gi][:, self.num_classes:], axis = 1, keepdims = True) + 1e-8)))
             if not self.ml:
                 g_loss += self.generation["g_prior"][gi] + self.generation["g_noise"][gi]
+                g_loss_custom += self.generation["g_prior"][gi] + self.generation["g_noise"][gi]
+
             self.generation["g_losses"].append(g_loss)
+            self.generation["g_losses_custom"].append(g_loss_custom)
+
             g_opt = self._get_optimizer(self.g_learning_rate)
             self.g_optims.append(g_opt.minimize(g_loss, var_list=self.g_vars[gi]))
+
             g_opt_adam = tf.train.AdamOptimizer(learning_rate=self.g_learning_rate, beta1=0.5)
             self.g_optims_adam.append(g_opt_adam.minimize(g_loss, var_list=self.g_vars[gi]))
+
+            g_opt_adam_custom = tf.train.AdamOptimizer(learning_rate=self.g_learning_rate, beta1=0.5)
+            self.g_optims_adam_custom.append(g_opt_adam_custom.minimize(g_loss_custom, var_list=self.g_vars[gi]))
 
             
     def discriminator(self, x, K, reuse=False):
