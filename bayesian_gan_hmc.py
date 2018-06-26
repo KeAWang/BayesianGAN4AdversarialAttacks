@@ -21,9 +21,9 @@ from bgan_util import print_images, MnistDataset, CelebDataset, Cifar10, SVHN, I
 from bgan_models import BDCGAN
 import sys
 
-sys.path.insert(0, '/home/ubuntu/cleverhans')
+#sys.path.insert(0, '/home/ubuntu/cleverhans')
 #sys.path.insert(0, '/Users/mattwallingford/Documents/cleverhans')
-#sys.path.insert(0, '/home/alex/cleverhans')
+sys.path.insert(0, '/home/alex/cleverhans')
 
 from cleverhans.attacks import FastGradientMethod, BasicIterativeMethod
 from cleverhans.utils_tf import model_train, model_eval,model_loss
@@ -420,7 +420,7 @@ def b_dcgan(dataset, args):
                     print("Uncertainty for incorrect predictions: %.2f" % incorrect_uncertainty)
                     print("non_adversarial_classification_accuracy: %.2f" % non_adv_acc)
                     print("adversarial_classification_accuracy: %.2f" % adv_acc)
-                    """
+                    
                     if args.save_samples:
                         print("saving adversarial test images and test images")
                         i = 0
@@ -431,7 +431,7 @@ def b_dcgan(dataset, args):
                             i = i+1
                             if i==5: #save 5 adversarial images 
                                 break
-                    """
+                   
 
 
                 print("Supervised acc: %.2f" % (s_acc))
